@@ -1,0 +1,22 @@
+{
+  "name": "graphql-augment",
+  "version": "0.1.1",
+  "description": "",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raychee/graphql-augment.git"
+  },
+  "keywords": [],
+  "author": "Raychee Zhang",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Raychee/graphql-augment/issues"
+  },
+  "homepage": "https://github.com/Raychee/graphql-augment#readme",
+  "dependencies": {
+    "graphql": "^14.4.2",
+    "graphql-iso-date": "^3.6.1",
+    "graphql-tools": "^4.0.5"
+  }
+}
