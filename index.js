@@ -11,6 +11,8 @@ const {GraphQLJSON, GraphQLJSONObject} = require('graphql-type-json');
 const ARG_NAME_SORT = 'sort';
 const ARG_NAME_LIMIT = 'limit';
 const ARG_NAME_OFFSET = 'offset';
+const ARG_NAME_PAGE = 'page';
+const ARG_NAME_PAGESIZE = 'pageSize';
 
 
 function getEligibleOperators(type) {
@@ -266,6 +268,16 @@ class AugmentedArgResolver {
             if (processed || ctxs.length <= 0) {
                 ctxs.unshift(ctx);
             }
+            if (extra[ARG_NAME_PAGESIZE] !== undefined) {
+                extra[ARG_NAME_LIMIT] = extra[ARG_NAME_PAGESIZE];
+                delete extra[ARG_NAME_PAGESIZE];
+            }
+            if (extra[ARG_NAME_PAGE] !== undefined) {
+                if (extra[ARG_NAME_LIMIT] !== undefined) {
+                    extra[ARG_NAME_OFFSET] = extra[ARG_NAME_LIMIT] * (extra[ARG_NAME_PAGE] - 1);
+                }
+                delete extra[ARG_NAME_PAGE];
+            }
             if (augmentedResultType) {
                 return new ResultsResolver(resolvers, ctxs, extra);
             } else {
@@ -330,17 +342,18 @@ class Pageable extends SchemaDirectiveVisitor {
         // const filterInputType = ensureFilterInputType(this.schema, field.name);
         // const filterInputTypeFields = filterInputType.getFields();
         const existingArgs = new Set(field.args.map(a => a.name));
-        for (const paginationArg of [ARG_NAME_LIMIT, ARG_NAME_OFFSET]) {
-            const arg = {name: paginationArg, type: GraphQLInt, _augmentType: 'filter.pagination'};
-            if (paginationArg === ARG_NAME_LIMIT && this.args.default >= 0) {
-                arg.defaultValue = this.args.default;
-            }
-            if (!existingArgs.has(paginationArg)) {
-                field.args.push(arg);
-            }
-            // if (!(paginationArg in filterInputTypeFields)) {
-            //     filterInputTypeFields[paginationArg] = arg;
-            // }
+        if (!existingArgs.has(ARG_NAME_PAGE)) {
+            field.args.push({
+                name: ARG_NAME_PAGE, type: GraphQLInt, defaultValue: 1, _augmentType: 'filter.pagination'
+            });
+        }
+        if (!existingArgs.has(ARG_NAME_PAGESIZE)) {
+            field.args.push({
+                name: ARG_NAME_PAGESIZE,
+                type: GraphQLInt,
+                defaultValue: this.args.default >= 0 ? this.args.default : 10,
+                _augmentType: 'filter.pagination'
+            });
         }
     }
 
@@ -522,14 +535,14 @@ class ResultsResolver {
     }
 
     async getCount() {
-        if (this._count === undefined) {
-            if (this._results !== undefined) {
-                const results = await this._results;
-                if (Array.isArray(results)) {
-                    this._count = results.length;
-                }
-            }
-        }
+        // if (this._count === undefined) {
+        //     if (this._results !== undefined) {
+        //         const results = await this._results;
+        //         if (Array.isArray(results)) {
+        //             this._count = results.length;
+        //         }
+        //     }
+        // }
         if (this._count === undefined) {
             if (this.resolvers.count) {
                 this._count = this.resolvers.count(this.ctxs, this.extra);
