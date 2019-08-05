@@ -1,6 +1,6 @@
 {
   "name": "graphql-augment",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "",
   "main": "index.js",
   "repository": {
@@ -17,6 +17,7 @@
   "dependencies": {
     "graphql": "^14.4.2",
     "graphql-iso-date": "^3.6.1",
-    "graphql-tools": "^4.0.5"
+    "graphql-tools": "^4.0.5",
+    "graphql-type-json": "^0.3.0"
   }
 }

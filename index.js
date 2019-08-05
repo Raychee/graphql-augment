@@ -5,6 +5,7 @@ const {
     GraphQLInputObjectType, GraphQLObjectType,
 } = require('graphql');
 const {GraphQLDateTime} = require('graphql-iso-date');
+const {GraphQLJSON, GraphQLJSONObject} = require('graphql-type-json');
 
 
 const ARG_NAME_SORT = 'sort';
@@ -14,7 +15,7 @@ const ARG_NAME_OFFSET = 'offset';
 
 function getEligibleOperators(type) {
     const operators = ['is'];
-    if (type.name !== GraphQLBoolean.name) {
+    if ([GraphQLBoolean, GraphQLJSONObject].map(t => t.name).indexOf(type.name) < 0) {
         operators.push('not', 'in', 'not_in');
     }
     if ([GraphQLFloat, GraphQLInt, GraphQLString, GraphQLID, GraphQLDateTime].map(t => t.name).indexOf(type.name) >= 0) {
@@ -56,6 +57,35 @@ function ensureInputType(schema, typeName) {
     return inputType;
 }
 
+function ensureResultType(schema, fieldType) {
+    const typeName = getNamedType(fieldType).name;
+    const resultTypeName = `${typeName}Result`;
+    let resultType = schema.getType(resultTypeName);
+    if (!resultType) {
+        resultType = new GraphQLObjectType({
+            name: resultTypeName,
+            fields: {
+                results: {
+                    type: fieldType,
+                    async resolve(parent) {
+                        return await parent.getResults();
+                    }
+                },
+                count: {
+                    type: GraphQLInt,
+                    async resolve(parent) {
+                        return await parent.getCount();
+                    }
+                },
+            }
+        });
+        resultType._augmentType = 'result.type';
+        resultType._augmentedTypeName = typeName;
+        schema.getTypeMap()[resultTypeName] = resultType;
+    }
+    return resultType;
+}
+
 
 class AugmentedArgResolver {
 
@@ -75,6 +105,7 @@ class AugmentedArgResolver {
 
     async _resolve(args, typeName, schema, parentContext, existingContext) {
         let augmentedSchemaArgs;
+        let augmentedResultType;
         if (parentContext) {
             const type = schema.getType(typeName);
             if (!type) {
@@ -85,26 +116,30 @@ class AugmentedArgResolver {
             }
             augmentedSchemaArgs = Object.values(type.getFields());
         } else {
-            let type;
             if (typeName.startsWith('Update')) {
                 const mutationType = schema.getMutationType();
+                let field;
                 if (mutationType) {
-                    type = mutationType.getFields()[typeName];
+                    field = mutationType.getFields()[typeName];
                 }
-                if (!type) {
+                if (!field) {
                     throw new UserInputError(`mutation type "${typeName}" is not valid`);
                 }
-                augmentedSchemaArgs = type.args;
+                augmentedSchemaArgs = field.args;
                 typeName = typeName.slice(6);
             } else {
                 const queryType = schema.getQueryType();
+                let field;
                 if (queryType) {
-                    type = queryType.getFields()[typeName];
+                    field = queryType.getFields()[typeName];
                 }
-                if (type) {
-                    augmentedSchemaArgs = type.args;
+                if (field) {
+                    augmentedSchemaArgs = field.args;
+                    if (field.type._augmentType === 'result.type') {
+                        augmentedResultType = field.type;
+                    }
                 } else {
-                    type = schema.getType(typeName);
+                    const type = schema.getType(typeName);
                     if (!type) {
                         throw new UserInputError(`type "${typeName}" is not valid`);
                     }
@@ -228,10 +263,14 @@ class AugmentedArgResolver {
         if (parentContext) {
             return await resolvers.resolve(ctx);
         } else {
-            if (processed) {
+            if (processed || ctxs.length <= 0) {
                 ctxs.unshift(ctx);
             }
-            return await resolvers.return(ctxs, extra);
+            if (augmentedResultType) {
+                return new ResultsResolver(resolvers, ctxs, extra);
+            } else {
+                return await resolvers.return(ctxs, extra);
+            }
         }
     }
 
@@ -242,10 +281,10 @@ class Sortable extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
         if (details.objectType !== this.schema.getQueryType()) {
-            throw new Error('directive "Paginated" should only be used on root query field definitions');
+            throw new Error('directive "@sortable" should only be used on root query field definitions');
         }
         if (!this.schema.getType(field.name)) {
-            throw new Error(`directive "Paginated" used on field "${field.name}" which does not match any of the existing types`);
+            throw new Error(`directive "@sortable" used on field "${field.name}" which does not match any of the existing types`);
         }
         const existingArgs = new Set(field.args.map(a => a.name));
         const sortInputTypeName = `${ARG_NAME_SORT}Input`;
@@ -283,10 +322,10 @@ class Pageable extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
         if (details.objectType !== this.schema.getQueryType()) {
-            throw new Error('directive "Paginated" should only be used on root query field definitions');
+            throw new Error('directive "@pageable" should only be used on root query field definitions');
         }
         if (!this.schema.getType(field.name)) {
-            throw new Error(`directive "Paginated" used on field "${field.name}" which does not match any of the existing types`);
+            throw new Error(`directive "@pageable" used on field "${field.name}" which does not match any of the existing types`);
         }
         // const filterInputType = ensureFilterInputType(this.schema, field.name);
         // const filterInputTypeFields = filterInputType.getFields();
@@ -370,11 +409,11 @@ class Inputable extends SchemaDirectiveVisitor {
         if (details.objectType === this.schema.getMutationType()) {
 
             if (!field.name.startsWith('Update')) {
-                throw new Error('directive "input" should be used on root query fields that only starts with "Update..."');
+                throw new Error('directive "@inputable" should be used on root query fields that only starts with "Update..."');
             }
             const typeName = field.name.slice(6);
             if (!this.schema.getType(typeName)) {
-                throw new Error(`directive "input" used on field "${field.name}" but "${typeName}" does not match any of the existing types`);
+                throw new Error(`directive "@inputable" used on field "${field.name}" but "${typeName}" does not match any of the existing types`);
             }
             if (field.args.every(a => a.name !== 'inputs')) {
                 field.args.push({
@@ -448,20 +487,77 @@ class Inputable extends SchemaDirectiveVisitor {
 }
 
 
+class Results extends SchemaDirectiveVisitor {
+
+    visitFieldDefinition(field, details) {
+        if (details.objectType !== this.schema.getQueryType()) {
+            throw new Error('directive "@results" should only be used on root query field definitions');
+        }
+        if (field.type._augmentType !== 'result.type') {
+            field.type = ensureResultType(this.schema, field.type);
+        }
+    }
+
+}
+
+
+class ResultsResolver {
+
+    constructor(resolvers, ctxs, extra) {
+        this.resolvers = resolvers;
+        this.ctxs = ctxs;
+        this.extra = extra;
+
+        this._results = undefined;
+        this._count = undefined;
+    }
+
+    async getResults() {
+        if (this._results === undefined) {
+            if (this.resolvers.return) {
+                this._results = this.resolvers.return(this.ctxs, this.extra);
+            }
+        }
+        return this._results;
+    }
+
+    async getCount() {
+        if (this._count === undefined) {
+            if (this._results !== undefined) {
+                const results = await this._results;
+                if (Array.isArray(results)) {
+                    this._count = results.length;
+                }
+            }
+        }
+        if (this._count === undefined) {
+            if (this.resolvers.count) {
+                this._count = this.resolvers.count(this.ctxs, this.extra);
+            }
+        }
+        return this._count;
+    }
+
+}
+
+
 module.exports = {
     AugmentedArgResolver,
+    ResultsResolver,
 
     schemaDirectives: {
         sortable: Sortable,
         pageable: Pageable,
         filterable: Filterable,
         inputable: Inputable,
+        results: Results,
     },
 
     UserInputError,
 
     isInputType, getNamedType, getNullableType,
-    GraphQLBoolean, GraphQLInt, GraphQLFloat, GraphQLString, GraphQLID, GraphQLDateTime,
+    GraphQLBoolean, GraphQLInt, GraphQLFloat, GraphQLString, GraphQLID,
+    GraphQLDateTime, GraphQLJSON, GraphQLJSONObject,
     GraphQLInputObjectType, GraphQLObjectType,
     GraphQLList, GraphQLNonNull,
 };
