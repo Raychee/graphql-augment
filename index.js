@@ -12,7 +12,7 @@ const ARG_NAME_SORT = 'sort';
 const ARG_NAME_LIMIT = 'limit';
 const ARG_NAME_OFFSET = 'offset';
 const ARG_NAME_PAGE = 'page';
-const ARG_NAME_PAGESIZE = 'pageSize';
+const ARG_NAME_PAGESIZE = 'limit';
 
 
 function getEligibleOperators(type) {
@@ -269,14 +269,16 @@ class AugmentedArgResolver {
                 ctxs.unshift(ctx);
             }
             if (extra[ARG_NAME_PAGESIZE] !== undefined) {
-                extra[ARG_NAME_LIMIT] = extra[ARG_NAME_PAGESIZE];
+                const limit = extra[ARG_NAME_PAGESIZE];
                 delete extra[ARG_NAME_PAGESIZE];
+                extra[ARG_NAME_LIMIT] = limit;
             }
             if (extra[ARG_NAME_PAGE] !== undefined) {
-                if (extra[ARG_NAME_LIMIT] !== undefined) {
-                    extra[ARG_NAME_OFFSET] = extra[ARG_NAME_LIMIT] * (extra[ARG_NAME_PAGE] - 1);
-                }
+                const page = extra[ARG_NAME_PAGE];
                 delete extra[ARG_NAME_PAGE];
+                if (extra[ARG_NAME_LIMIT] !== undefined) {
+                    extra[ARG_NAME_OFFSET] = extra[ARG_NAME_LIMIT] * (page - 1);
+                }
             }
             if (augmentedResultType) {
                 return new ResultsResolver(resolvers, ctxs, extra);
@@ -369,6 +371,19 @@ class Filterable extends SchemaDirectiveVisitor {
             const queryField = this.schema.getQueryType().getFields()[field.name];
             if (queryField.args.every(a => a.name !== 'filters')) {
                 const filterInputType = ensureFilterInputType(this.schema, field.name);
+                if (this.args.includeCustomized) {
+                    const filterInputTypeFields = filterInputType.getFields();
+                    for (const arg of queryField.args) {
+                        if (!arg._augmentType) {
+                            filterInputTypeFields[arg.name] = {
+                                name: arg.name,
+                                type: arg.type,
+                                description: arg.description,
+                                _augmentType: 'filter.customized', _augmentedArg: arg.name
+                            };
+                        }
+                    }
+                }
                 queryField.args.push({name: 'filters', type: new GraphQLList(new GraphQLNonNull(filterInputType)), _augmentType: 'filter.filters'});
             }
 
@@ -559,10 +574,10 @@ module.exports = {
     ResultsResolver,
 
     schemaDirectives: {
-        sortable: Sortable,
-        pageable: Pageable,
-        filterable: Filterable,
-        inputable: Inputable,
+        sort: Sortable,
+        page: Pageable,
+        filter: Filterable,
+        input: Inputable,
         results: Results,
     },
 
