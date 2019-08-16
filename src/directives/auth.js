@@ -11,13 +11,13 @@ const config = require('../config');
 const {checkAuth} = require('../utils');
 
 
-const ALL_AUTH_PREFIXES = {
-    query: config.FIELD_PREFIX_QUERY,
-    insert: config.FIELD_PREFIX_INSERT,
-    update: config.FIELD_PREFIX_UPDATE,
-    upsert: config.FIELD_PREFIX_UPSERT,
-    result: config.FIELD_PREFIX_RESULT,
-};
+const ALL_AUTH_PREFIXES = [
+    config.MODE_QUERY,
+    config.MODE_INSERT,
+    config.MODE_UPDATE,
+    config.MODE_UPSERT,
+    config.MODE_RESULT,
+];
 
 
 function getDefaultValue(type) {
@@ -64,19 +64,23 @@ function ensureAuthFieldResolvers(type) {
             const extra = args[0] && args[0]._extra;
             if (extra) {
                 const {jwt: jwtPayload, auth: checkAuthFn} = extra;
-                if (!extra.checked) extra.checked = {};
-                if (!extra.checked[type.name]) {
-                    extra.checked[type.name] = {};
-                    const typeAuth = type._auth && type._auth[config.FIELD_PREFIX_RESULT];
-                    await checkAuth(jwtPayload, typeAuth, checkAuthFn, type, undefined, 'resolve', args[0]);
-                }
-                if (!extra.checked[type.name][field.name]) {
-                    extra.checked[type.name][field.name] = checkAuth(
-                        jwtPayload, field._auth[config.FIELD_PREFIX_RESULT], checkAuthFn,
-                        type, field.name, 'resolve', args[0], field._authSilent
-                    );
-                }
-                const message = await extra.checked[type.name][field.name];
+                // if (!extra.checked) extra.checked = {};
+                // if (!extra.checked[type.name]) {
+                //     extra.checked[type.name] = {};
+                    const typeAuth = type._auth && type._auth[config.MODE_RESULT];
+                    await checkAuth(jwtPayload, typeAuth, checkAuthFn, type, undefined, config.MODE_RESULT, args[0]);
+                // }
+                // if (!extra.checked[type.name][field.name]) {
+                //     extra.checked[type.name][field.name] = checkAuth(
+                //         jwtPayload, field._auth && field._auth[config.MODE_RESULT], checkAuthFn,
+                //         type, field.name, config.MODE_RESULT, args[0], field._auth.silent
+                //     );
+                // }
+                // const message = await extra.checked[type.name][field.name];
+                const message = await checkAuth(
+                    jwtPayload, field._auth && field._auth[config.MODE_RESULT], checkAuthFn,
+                    type, field.name, config.MODE_RESULT, args[0], field._auth.silent
+                );
                 if (message) {
                     return getDefaultValue(field.type);
                 }
@@ -111,18 +115,12 @@ class Auth extends SchemaDirectiveVisitor {
     }
 
     _addAuth(typeOrField) {
-        typeOrField._auth = {};
         if (this.args.all) {
-            for (const p of Object.keys(ALL_AUTH_PREFIXES)) {
+            for (const p of ALL_AUTH_PREFIXES) {
                 this.args[p] = this.args.all;
             }
         }
-        for (const [p, prefix] of Object.entries(ALL_AUTH_PREFIXES)) {
-            if (this.args[p]) {
-                typeOrField._auth[prefix] = this.args[p];
-                typeOrField._authSilent = this.args.silent;
-            }
-        }
+        typeOrField._auth = this.args;
     }
 
 }

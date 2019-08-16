@@ -21,18 +21,18 @@ const config = require('./src/config');
 
 
 module.exports = {
-    schemaDirectives: {
-        query: Query,
+    makeSchemaDirectives: () => ({
+        [config.MODE_QUERY]: Query,
+        [config.MODE_INSERT]: Insert,
+        [config.MODE_UPDATE]: Update,
+        [config.MODE_UPSERT]: Upsert,
         page: Page,
         sort: Sort,
         result: Result,
-        insert: Insert,
-        update: Update,
-        upsert: Upsert,
         batch: Batch,
         auth: Auth,
         jwt: Jwt,
-    },
+    }),
 
     AugmentedArgResolver,
     ResultResolver,

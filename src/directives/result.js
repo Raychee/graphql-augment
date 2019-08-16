@@ -29,6 +29,7 @@ function ensureResultType(schema, fieldType) {
         });
         resultType._augmentType = 'result.type';
         resultType._augmentedTypeName = typeName;
+        resultType._augmentedMode = config.MODE_RESULT;
         schema.getTypeMap()[resultTypeName] = resultType;
     }
     return resultType;

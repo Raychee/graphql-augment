@@ -37,7 +37,7 @@ function ensureQueryInputType(schema, typeName) {
     }
     filterInputType._augmentType = 'filter.type';
     filterInputType._augmentedTypeName = typeName;
-    filterInputType._augmentedMode = config.FIELD_PREFIX_QUERY;
+    filterInputType._augmentedMode = config.MODE_QUERY;
     return filterInputType;
 }
 
@@ -46,10 +46,10 @@ class Query extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
         if (details.objectType === this.schema.getQueryType()) {
-            throw new Error(`directive "@query" should not be used on root query fields`);
+            throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root query fields`);
         }
         if (details.objectType === this.schema.getMutationType()) {
-            throw new Error(`directive "@query" should not be used on root mutation fields`);
+            throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root mutation fields`);
         }
         const filterInputType = ensureQueryInputType(this.schema, details.objectType.name);
         const filterInputTypeFields = filterInputType.getFields();

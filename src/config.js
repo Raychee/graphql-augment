@@ -14,4 +14,10 @@ module.exports = {
     FIELD_PREFIX_UPSERT: 'Upsert',
     FIELD_PREFIX_RESULT: 'Result',
 
+    MODE_QUERY: 'query',
+    MODE_INSERT: 'insert',
+    MODE_UPDATE: 'update',
+    MODE_UPSERT: 'upsert',
+    MODE_RESULT: 'result',
+
 };

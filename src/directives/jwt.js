@@ -15,7 +15,11 @@ class Jwt extends SchemaDirectiveVisitor {
         const {resolve = defaultFieldResolver} = field;
         field.resolve = async function (...args) {
             const payload = await resolve.apply(this, args);
-            return jwt.sign(payload, secret, options);
+            if (payload) {
+                return jwt.sign(payload, secret, options);
+            } else {
+                return "";
+            }
         };
         this.schema._auth = {secret, options};
     }

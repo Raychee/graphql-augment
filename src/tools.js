@@ -6,6 +6,12 @@ const {ResultResolver} = require('./directives/result');
 const {checkAuth, getJwtPayload} = require('./utils');
 
 
+const ALL_MUTATION_MODES = {
+    [config.FIELD_PREFIX_INSERT]: config.MODE_INSERT,
+    [config.FIELD_PREFIX_UPDATE]: config.MODE_UPDATE,
+    [config.FIELD_PREFIX_UPSERT]: config.MODE_UPSERT,
+};
+
 class AugmentedArgResolver {
 
     constructor(resolvers, options) {
@@ -44,8 +50,7 @@ class AugmentedArgResolver {
             mode = type._augmentedMode;
             augmentedSchemaArgs = Object.values(type.getFields());
         } else {
-            const prefix = [config.FIELD_PREFIX_INSERT, config.FIELD_PREFIX_UPDATE, config.FIELD_PREFIX_UPSERT]
-                .find(p => typeName.startsWith(p));
+            const prefix = Object.keys(ALL_MUTATION_MODES).find(p => typeName.startsWith(p));
             if (prefix) {
                 const mutationType = schema.getMutationType();
                 let field;
@@ -57,7 +62,7 @@ class AugmentedArgResolver {
                 }
                 augmentedSchemaArgs = field.args;
                 typeName = typeName.slice(prefix.length);
-                mode = prefix;
+                mode = ALL_MUTATION_MODES[prefix];
                 await checkAuth(jwtPayload, field._auth && field._auth[mode], this.resolvers.auth, undefined, field.name, 'query', args)
             } else {
                 const queryType = schema.getQueryType();
@@ -68,7 +73,7 @@ class AugmentedArgResolver {
                 if (field) {
                     augmentedSchemaArgs = field.args;
                     typeName = typeName.slice(config.FIELD_PREFIX_QUERY.length);
-                    mode = config.FIELD_PREFIX_QUERY;
+                    mode = config.MODE_QUERY;
                     if (field.type._augmentType === 'result.type') {
                         augmentedResultType = field.type;
                     }
@@ -115,7 +120,7 @@ class AugmentedArgResolver {
                     if (augmentedArg.name in args && this.resolvers.filter) {
                         await checkAuth(
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
-                            this.resolvers.auth, type, augmentedArg._augmentedField, 'query', args
+                            this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
                         ctx = await this.resolvers.filter(ctx,
                             augmentedArg._augmentedField, augmentedArg._augmentedOperator, argValue,
@@ -128,7 +133,7 @@ class AugmentedArgResolver {
                     if (typeof argValue === 'object' && this.resolvers.nested) {
                         await checkAuth(
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
-                            this.resolvers.auth, type, augmentedArg._augmentedField, 'query', args
+                            this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
                         ctx = await this.resolvers.nested(ctx,
                             augmentedArg._augmentedField,
@@ -162,7 +167,7 @@ class AugmentedArgResolver {
                     if (augmentedArg.name in args && this.resolvers.input) {
                         await checkAuth(
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
-                            this.resolvers.auth, type, augmentedArg._augmentedField, 'query', args
+                            this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
                         ctx = await this.resolvers.input(ctx, augmentedArg._augmentedField, argValue, type) || ctx;
                         processed = true;
@@ -172,7 +177,7 @@ class AugmentedArgResolver {
                     if (typeof argValue === 'object' && this.resolvers.nested) {
                         await checkAuth(
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
-                            this.resolvers.auth, type, augmentedArg._augmentedField, 'query', args
+                            this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
                         ctx = await this.resolvers.nested(ctx,
                             augmentedArg._augmentedField,
@@ -186,7 +191,7 @@ class AugmentedArgResolver {
                     if (augmentedArg.name in args && this.resolvers.nested) {
                         await checkAuth(
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
-                            this.resolvers.auth, type, augmentedArg._augmentedField, 'query', args
+                            this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
                         ctx = await this.resolvers.nested(ctx,
                             augmentedArg._augmentedField,
