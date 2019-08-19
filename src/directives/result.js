@@ -1,5 +1,6 @@
 const {SchemaDirectiveVisitor} = require('graphql-tools');
 const {getNamedType, GraphQLInt, GraphQLObjectType} = require('graphql');
+const {GraphQLJSONObject} = require('graphql-type-json');
 
 const config = require('../config');
 const {sideCar} = require('../utils');
@@ -25,6 +26,12 @@ function ensureResultType(schema, fieldType) {
                         return await parent.getCount();
                     }
                 },
+                debug: {
+                    type: GraphQLJSONObject,
+                    async resolve(parent) {
+                        return await parent.getDebugInfo();
+                    }
+                }
             }
         });
         resultType._augmentType = 'result.type';
@@ -89,6 +96,15 @@ class ResultResolver {
             }
         }
         return this._count;
+    }
+
+    async getDebugInfo() {
+        if (this._debug === undefined) {
+            if (this.resolvers.debug) {
+                this._debug = await this.resolvers.debug(this.ctxs, this.extra, this.type);
+            }
+        }
+        return this._debug;
     }
 
 }
