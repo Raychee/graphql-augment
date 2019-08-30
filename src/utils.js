@@ -72,7 +72,7 @@ function sideCar(obj, extra, key) {
                 return extra;
             } else {
                 const v = Reflect.get(target, p, receiver);
-                if (typeof v === 'object' && v.constructor === Object) {
+                if (typeof v === 'object' && v !== null && v.constructor === Object) {
                     return sideCar(v, extra);
                 } else {
                     return v;

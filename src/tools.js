@@ -179,11 +179,21 @@ class AugmentedArgResolver {
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
                             this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
-                        ctx = await this.resolvers.nested(ctx,
-                            augmentedArg._augmentedField,
-                            await this._resolve(argValue, augmentedArg.type.name, schema, jwtPayload, ctx),
-                            type
-                        ) || ctx;
+                        if (Array.isArray(argValue)) {
+                            const tctxs = [];
+                            for (const argV of argValue) {
+                                let ictx = await this.resolvers.init(parentContext, type);
+                                ictx = await this._resolve(argV, getNamedType(augmentedArg.type).name, schema, jwtPayload, ctx, ictx);
+                                tctxs.push(ictx);
+                            }
+                            ctx = await this.resolvers.nested(ctx, augmentedArg._augmentedField, tctxs, type) || ctx;
+                        } else {
+                            ctx = await this.resolvers.nested(ctx,
+                                augmentedArg._augmentedField,
+                                await this._resolve(argValue, augmentedArg.type.name, schema, jwtPayload, ctx),
+                                type
+                            ) || ctx;
+                        }
                         processed = true;
                     }
                     break;
@@ -193,20 +203,30 @@ class AugmentedArgResolver {
                             jwtPayload, (type.getFields()[augmentedArg._augmentedField]._auth || {})[mode],
                             this.resolvers.auth, type, augmentedArg._augmentedField, mode, args
                         );
-                        ctx = await this.resolvers.nested(ctx,
-                            augmentedArg._augmentedField,
-                            await this._resolve({[augmentedArg._augmentedKey]: argValue}, augmentedArg._augmentedObjectTypeName, schema, jwtPayload, ctx),
-                            type
-                        ) || ctx;
+                        if (Array.isArray(argValue)) {
+                            const tctxs = [];
+                            for (const argV of argValue) {
+                                let ictx = await this.resolvers.init(parentContext, type);
+                                ictx = await this._resolve({[augmentedArg._augmentedKey]: argV}, getNamedType(augmentedArg.type).name, schema, jwtPayload, ctx, ictx);
+                                tctxs.push(ictx);
+                            }
+                            ctx = await this.resolvers.nested(ctx, augmentedArg._augmentedField, tctxs, type) || ctx;
+                        } else {
+                            ctx = await this.resolvers.nested(ctx,
+                                augmentedArg._augmentedField,
+                                await this._resolve({[augmentedArg._augmentedKey]: argValue}, augmentedArg._augmentedObjectTypeName, schema, jwtPayload, ctx),
+                                type
+                            ) || ctx;
+                        }
                         processed = true;
                     }
                     break;
                 case "input.inputs":
                     if (Array.isArray(argValue)) {
                         const subTypeName = getNamedType(augmentedArg.type).name;
-                        for (const arg of argValue) {
+                        for (const argV of argValue) {
                             let ictx = await this.resolvers.init(parentContext, type);
-                            ictx = await this._resolve(arg, subTypeName, schema, jwtPayload, parentContext, ictx);
+                            ictx = await this._resolve(argV, subTypeName, schema, jwtPayload, parentContext, ictx);
                             ctxs.push(ictx);
                         }
                     }

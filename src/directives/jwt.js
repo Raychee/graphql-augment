@@ -5,6 +5,12 @@ const jwt = require('jsonwebtoken');
 
 class Jwt extends SchemaDirectiveVisitor {
 
+    visitSchema(schema) {
+        const secret = this.args.secret;
+        const options = {...this.args};
+        schema._auth = {secret, options};
+    }
+
     visitFieldDefinition(field) {
         const secret = this.args.secret;
         const options = {...this.args};
