@@ -79,7 +79,7 @@ function ensureAuthFieldResolvers(type) {
                 // const message = await extra.checked[type.name][field.name];
                 const message = await checkAuth(
                     jwtPayload, field._auth && field._auth[config.MODE_RESULT], checkAuthFn,
-                    type, field.name, config.MODE_RESULT, args[0], field._auth.silent
+                    type, field.name, config.MODE_RESULT, args[0], field._auth && field._auth.silent
                 );
                 if (message) {
                     return getDefaultValue(field.type);
