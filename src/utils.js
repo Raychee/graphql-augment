@@ -16,7 +16,7 @@ async function checkAuth(jwtPayload, auth, checkAuthFn, type, field, mode, args,
         if (authMessage) {
             if (field) {
                 authMessage = `field "${field}" of type "${type.name}" is not authorized: ${authMessage}`;
-            } else {
+            } else if (type) {
                 authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
             }
             if (silent) {

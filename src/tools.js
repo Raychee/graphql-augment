@@ -14,22 +14,19 @@ const ALL_MUTATION_MODES = {
 
 class AugmentedArgResolver {
 
-    constructor(resolvers, options) {
+    constructor(resolvers, {depthFirst = false} = {}) {
         this.resolvers = resolvers;
-        const {depthFirst} = options || {};
-        this.depthFirst = depthFirst || false;
+        this.depthFirst = depthFirst;
     }
 
     async resolve(args, ...resolveInfo) {
-        let fieldName, schema, jwtPayload;
+        let fieldName, schema, jwtPayload, info;
         if (resolveInfo[0].fieldName) {
-            fieldName = resolveInfo[0].fieldName;
-            schema = resolveInfo[0].schema;
-            jwtPayload = resolveInfo[1];
+            [info, jwtPayload] = resolveInfo;
+            fieldName = info.fieldName;
+            schema = info.schema;
         } else if (typeof resolveInfo[0] === 'string') {
-            fieldName = resolveInfo[0];
-            schema = resolveInfo[1];
-            jwtPayload = resolveInfo[2];
+            [fieldName, schema, jwtPayload] = resolveInfo;
         }
         jwtPayload = getJwtPayload(jwtPayload, schema);
         return await this._resolve(args, fieldName, schema, jwtPayload);
@@ -106,14 +103,7 @@ class AugmentedArgResolver {
                 plain.push({augmentedArg, argValue: args[augmentedArg.name]});
             }
         }
-        const process = [];
-        if (this.depthFirst) {
-            process.push.apply(process, nested);
-            process.push.apply(process, plain);
-        } else {
-            process.push.apply(process, plain);
-            process.push.apply(process, nested);
-        }
+        const process = this.depthFirst ? [...nested, ...plain] : [...plain, ...nested];
         for (const {augmentedArg, argValue} of process) {
             switch (augmentedArg._augmentType) {
                 case "filter.operator":
