@@ -4,30 +4,32 @@ const {GraphQLInt} = require('graphql');
 const config = require('../config');
 
 
+function augmentField(field) {
+    const existingArgs = new Set(field.args.map(a => a.name));
+    if (!existingArgs.has(config.ARG_NAME_PAGE)) {
+        field.args.push({
+            name: config.ARG_NAME_PAGE, type: GraphQLInt, defaultValue: 1, _augmentType: 'filter.pagination'
+        });
+    }
+    if (!existingArgs.has(config.ARG_NAME_PAGESIZE)) {
+        field.args.push({
+            name: config.ARG_NAME_PAGESIZE,
+            type: GraphQLInt,
+            defaultValue: field._augmentPage.size >= 0 ? field._augmentPage.size : 1,
+            _augmentType: 'filter.pagination'
+        });
+    }
+}
+
 class Page extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        if (details.objectType !== this.schema.getQueryType()) {
-            throw new Error('directive "@pageable" should only be used on root query field definitions');
+        if (details.objectType === this.schema.getMutationType()) {
+            throw new Error('directive "@page" should not be used on root mutation field definitions');
         }
-        if (!this.schema.getType(field.name)) {
-            throw new Error(`directive "@pageable" used on field "${field.name}" which does not match any of the existing types`);
-        }
-        // const filterInputType = ensureFilterInputType(this.schema, field.name);
-        // const filterInputTypeFields = filterInputType.getFields();
-        const existingArgs = new Set(field.args.map(a => a.name));
-        if (!existingArgs.has(config.ARG_NAME_PAGE)) {
-            field.args.push({
-                name: config.ARG_NAME_PAGE, type: GraphQLInt, defaultValue: 1, _augmentType: 'filter.pagination'
-            });
-        }
-        if (!existingArgs.has(config.ARG_NAME_PAGESIZE)) {
-            field.args.push({
-                name: config.ARG_NAME_PAGESIZE,
-                type: GraphQLInt,
-                defaultValue: this.args.size >= 0 ? this.args.size : 1,
-                _augmentType: 'filter.pagination'
-            });
+        field._augmentPage = this.args;
+        if (details.objectType === this.schema.getQueryType() || field._augmentResult) {
+            augmentField(field);
         }
     }
 
@@ -36,4 +38,6 @@ class Page extends SchemaDirectiveVisitor {
 
 module.exports = {
     Page,
+
+    augmentField,
 };

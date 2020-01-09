@@ -60,32 +60,23 @@ function ensureAuthFieldResolvers(type) {
     if (type._hasAuthResolvers) return;
     for (const field of Object.values(type.getFields())) {
         const {resolve = defaultFieldResolver} = field;
-        field.resolve = async function (...args) {
-            const extra = args[0] && args[0]._extra;
+        field.resolve = async function (parent, args, context, info) {
+            const extra = parent && parent._extra;
+            const env = {parent, args, context, info};
+            const options = {type, mode: config.MODE_RESULT, args, env};
             if (extra) {
                 const {jwt: jwtPayload, auth: checkAuthFn} = extra;
-                // if (!extra.checked) extra.checked = {};
-                // if (!extra.checked[type.name]) {
-                //     extra.checked[type.name] = {};
                     const typeAuth = type._auth && type._auth[config.MODE_RESULT];
-                    await checkAuth(jwtPayload, typeAuth, checkAuthFn, type, undefined, config.MODE_RESULT, args[0]);
-                // }
-                // if (!extra.checked[type.name][field.name]) {
-                //     extra.checked[type.name][field.name] = checkAuth(
-                //         jwtPayload, field._auth && field._auth[config.MODE_RESULT], checkAuthFn,
-                //         type, field.name, config.MODE_RESULT, args[0], field._auth.silent
-                //     );
-                // }
-                // const message = await extra.checked[type.name][field.name];
+                    await checkAuth({}, jwtPayload, typeAuth, checkAuthFn, options);
                 const message = await checkAuth(
-                    jwtPayload, field._auth && field._auth[config.MODE_RESULT], checkAuthFn,
-                    type, field.name, config.MODE_RESULT, args[0], field._auth && field._auth.silent
+                    {}, jwtPayload, (field._auth || {})[config.MODE_RESULT], checkAuthFn,
+                    {field, silent: (field._auth || {}).silent, ...options},
                 );
                 if (message) {
                     return getDefaultValue(field.type);
                 }
             }
-            return resolve.apply(this, args);
+            return resolve.call(this, parent, args, context, info);
         }
     }
     type._hasAuthResolvers = true;

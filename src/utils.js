@@ -2,11 +2,11 @@ const {AuthenticationError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
 
 
-async function checkAuth(jwtPayload, auth, checkAuthFn, type, field, mode, args, silent) {
+async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, field, ...options}) {
     if (auth) {
         let authMessage;
         if (checkAuthFn) {
-            authMessage = await checkAuthFn(jwtPayload, auth, type, field, mode, args);
+            authMessage = await checkAuthFn(ctx, jwtPayload, auth, {type, field, ...options});
         } else {
             authMessage = false;
         }
@@ -15,7 +15,7 @@ async function checkAuth(jwtPayload, auth, checkAuthFn, type, field, mode, args,
         }
         if (authMessage) {
             if (field) {
-                authMessage = `field "${field}" of type "${type.name}" is not authorized: ${authMessage}`;
+                authMessage = `field "${field.name}" of type "${type.name}" is not authorized: ${authMessage}`;
             } else if (type) {
                 authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
             }

@@ -4,16 +4,20 @@ const {GraphQLJSONObject} = require('graphql-type-json');
 
 const config = require('../config');
 const {sideCar} = require('../utils');
+const {augmentField: augmentFieldForQuery} = require('./query');
+const {augmentField: augmentFieldForBatch} = require('./batch');
+const {augmentField: augmentFieldForPage} = require('./page');
+const {augmentField: augmentFieldForSort} = require('./sort');
 
 
 class ResultResolver {
 
-    constructor(resolvers, ctxs, extra, type, jwt) {
+    constructor(resolvers, ctxs, extra, jwt, optionals) {
         this.resolvers = resolvers;
         this.ctxs = ctxs;
         this.extra = extra;
-        this.type = type;
         this.jwt = jwt;
+        this.optionals = optionals;
 
         this._results = undefined;
         this._count = undefined;
@@ -23,7 +27,7 @@ class ResultResolver {
         if (this._results === undefined) {
             if (this.resolvers.return) {
                 this._results = sideCar(
-                    await this.resolvers.return(this.ctxs, this.extra, this.type),
+                    await this.resolvers.return(this.ctxs, this.extra, this.optionals),
                     {auth: this.resolvers.auth, jwt: this.jwt}
                 );
             }
@@ -32,17 +36,9 @@ class ResultResolver {
     }
 
     async getCount() {
-        // if (this._count === undefined) {
-        //     if (this._results !== undefined) {
-        //         const results = await this._results;
-        //         if (Array.isArray(results)) {
-        //             this._count = results.length;
-        //         }
-        //     }
-        // }
         if (this._count === undefined) {
             if (this.resolvers.count) {
-                this._count = this.resolvers.count(this.ctxs, this.extra, this.type);
+                this._count = this.resolvers.count(this.ctxs, this.extra, this.optionals);
             }
         }
         return this._count;
@@ -51,7 +47,7 @@ class ResultResolver {
     async getDebugInfo() {
         if (this._debug === undefined) {
             if (this.resolvers.debug) {
-                this._debug = await this.resolvers.debug(this.ctxs, this.extra, this.type);
+                this._debug = await this.resolvers.debug(this.ctxs, this.extra, this.optionals);
             }
         }
         return this._debug;
@@ -70,31 +66,31 @@ function ensureResultType(schema, fieldType) {
             fields: {
                 results: {
                     type: fieldType,
-                    async resolve(...args) {
-                        if (args[0] instanceof ResultResolver) {
-                            return await args[0].getResults();
+                    async resolve(arg, ...args) {
+                        if (arg instanceof ResultResolver) {
+                            return await arg.getResults();
                         } else {
-                            return defaultFieldResolver.apply(this, args);
+                            return defaultFieldResolver.call(this, arg, ...args);
                         }
                     }
                 },
                 count: {
                     type: GraphQLInt,
-                    async resolve(...args) {
-                        if (args[0] instanceof ResultResolver) {
-                            return await args[0].getCount();
+                    async resolve(arg, ...args) {
+                        if (arg instanceof ResultResolver) {
+                            return await arg.getCount();
                         } else {
-                            return defaultFieldResolver.apply(this, args);
+                            return defaultFieldResolver.call(this, arg, args);
                         }
                     }
                 },
                 debug: {
                     type: GraphQLJSONObject,
-                    async resolve(...args) {
-                        if (args[0] instanceof ResultResolver) {
-                            return await args[0].getDebugInfo();
+                    async resolve(arg, ...args) {
+                        if (arg instanceof ResultResolver) {
+                            return await arg.getDebugInfo();
                         } else {
-                            return defaultFieldResolver.apply(this, args);
+                            return defaultFieldResolver.call(this, arg, args);
                         }
                     }
                 }
@@ -112,11 +108,38 @@ function ensureResultType(schema, fieldType) {
 class Result extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        if (details.objectType !== this.schema.getQueryType() && details.objectType !== this.schema.getMutationType()) {
-            throw new Error(`directive "@${config.MODE_RESULT}" should be only used on root query/mutation fields`);
+        if (details.objectType === this.schema.getQueryType() || details.objectType === this.schema.getMutationType()) {
+            if (field.type._augmentType !== 'result.type') {
+                field.type = ensureResultType(this.schema, field.type);
+            }
+            return;
         }
-        if (field.type._augmentType !== 'result.type') {
-            field.type = ensureResultType(this.schema, field.type);
+        if (details.objectType === this.schema.getMutationType()) {
+            throw new Error(`directive "@${config.MODE_RESULT}" should not be used on root mutation fields`);
+        }
+        field._augmentResult = true;
+        const fieldType = getNamedType(field.type);
+        if (!(fieldType instanceof GraphQLObjectType)) {
+            return;
+        }
+        for (const typeField of Object.values(fieldType.getFields())) {
+            if (typeField._augmentQuery) {
+                const augments = augmentFieldForQuery(this.schema, typeField);
+                for (const augment of augments) {
+                    if (field.args.every(a => a.name !== augment.name)) {
+                        field.args.push(augment);
+                    }
+                }
+            }
+        }
+        if (field._augmentBatch) {
+            augmentFieldForBatch(this.schema, field, fieldType.name);
+        }
+        if (field._augmentPage) {
+            augmentFieldForPage(field);
+        }
+        if (field._augmentSort) {
+            augmentFieldForSort(this.schema, field);
         }
     }
 

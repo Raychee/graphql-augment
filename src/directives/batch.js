@@ -1,38 +1,41 @@
 const {SchemaDirectiveVisitor} = require('graphql-tools');
-const {GraphQLList, GraphQLNonNull} = require('graphql');
+const {GraphQLList, GraphQLNonNull, getNamedType} = require('graphql');
 
 const config = require('../config');
 const {ensureQueryInputType} = require('./query');
 const {ensureInputType} = require('./input');
 
 
+function augmentField(schema, targetField, typeName) {
+    if (targetField && targetField.args.every(a => a.name !== config.ARG_NAME_FILTERS)) {
+        const filterInputType = ensureQueryInputType(schema, typeName);
+        if (targetField._augmentBatch.includeCustomized) {
+            const filterInputTypeFields = filterInputType.getFields();
+            for (const arg of targetField.args) {
+                if (!arg._augmentType) {
+                    filterInputTypeFields[arg.name] = {
+                        name: arg.name,
+                        type: arg.type,
+                        description: arg.description,
+                        _augmentType: 'filter.customized', _augmentedArg: arg.name
+                    };
+                }
+            }
+        }
+        targetField.args.push({
+            name: config.ARG_NAME_FILTERS,
+            type: new GraphQLList(new GraphQLNonNull(filterInputType)),
+            _augmentType: 'filter.filters'
+        });
+    }
+}
+
+
 class Batch extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        if (details.objectType === this.schema.getQueryType()) {
-            const queryField = this.schema.getQueryType().getFields()[field.name];
-            if (queryField.args.every(a => a.name !== config.ARG_NAME_FILTERS)) {
-                const filterInputType = ensureQueryInputType(this.schema, field.name);
-                if (this.args.includeCustomized) {
-                    const filterInputTypeFields = filterInputType.getFields();
-                    for (const arg of queryField.args) {
-                        if (!arg._augmentType) {
-                            filterInputTypeFields[arg.name] = {
-                                name: arg.name,
-                                type: arg.type,
-                                description: arg.description,
-                                _augmentType: 'filter.customized', _augmentedArg: arg.name
-                            };
-                        }
-                    }
-                }
-                queryField.args.push({
-                    name: config.ARG_NAME_FILTERS,
-                    type: new GraphQLList(new GraphQLNonNull(filterInputType)),
-                    _augmentType: 'filter.filters'
-                });
-            }
-        } else if (details.objectType === this.schema.getMutationType()) {
+        field._augmentBatch = this.args;
+        if (details.objectType === this.schema.getMutationType()) {
             const allPrefixes = [config.FIELD_PREFIX_INSERT, config.FIELD_PREFIX_UPDATE, config.FIELD_PREFIX_UPSERT];
             const prefix = allPrefixes.find(p => field.name.startsWith(p));
             if (!prefix) {
@@ -64,7 +67,15 @@ class Batch extends SchemaDirectiveVisitor {
                 })
             }
         } else {
-            throw new Error(`directive "@batch" should be only used on root query/mutation fields`);
+            let targetField, typeName;
+            if (details.objectType === this.schema.getQueryType()) {
+                targetField = field;
+                typeName = field.name;
+            } else if (field._augmentResult) {
+                targetField = field;
+                typeName = getNamedType(field.type).name;
+            }
+            augmentField(this.schema, targetField, typeName);
         }
     }
 
@@ -73,4 +84,6 @@ class Batch extends SchemaDirectiveVisitor {
 
 module.exports = {
     Batch,
+
+    augmentField,
 };

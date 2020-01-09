@@ -42,6 +42,33 @@ function ensureQueryInputType(schema, typeName) {
 }
 
 
+function augmentField(schema, field) {
+    const fieldType = getNamedType(field.type);
+    const augments = [];
+    if (isInputType(fieldType)) {
+        const operators = field._augmentQuery.op || getEligibleOperators(fieldType);
+        for (const operator of operators) {
+            const filterInputTypeFieldName = operator === 'is' ?
+                field.name : `${field.name}_${operator}`;
+            const inputTypeFieldType = ['in', 'not_in'].indexOf(operator) >= 0 ?
+                new GraphQLList(fieldType) : fieldType;
+            augments.push({
+                name: filterInputTypeFieldName,
+                type: inputTypeFieldType,
+                _augmentType: 'filter.operator', _augmentedField: field.name, _augmentedOperator: operator
+            });
+        }
+    } else if (fieldType instanceof GraphQLObjectType) {
+        augments.push({
+            name: field.name,
+            type: ensureQueryInputType(schema, fieldType.name),
+            _augmentType: 'filter.nested', _augmentedField: field.name
+        });
+    }
+    return augments;
+}
+
+
 class Query extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
@@ -51,41 +78,35 @@ class Query extends SchemaDirectiveVisitor {
         if (details.objectType === this.schema.getMutationType()) {
             throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root mutation fields`);
         }
+        field._augmentQuery = this.args;
+        const augments = augmentField(this.schema, field);
         const filterInputType = ensureQueryInputType(this.schema, details.objectType.name);
         const filterInputTypeFields = filterInputType.getFields();
-        const fieldType = getNamedType(field.type);
-        const augments = [];
-        if (isInputType(fieldType)) {
-            const operators = this.args.op || getEligibleOperators(fieldType);
-            for (const operator of operators) {
-                const filterInputTypeFieldName = operator === 'is' ?
-                    field.name : `${field.name}_${operator}`;
-                const inputTypeFieldType = ['in', 'not_in'].indexOf(operator) >= 0 ?
-                    new GraphQLList(fieldType) : fieldType;
-                augments.push({
-                    name: filterInputTypeFieldName,
-                    type: inputTypeFieldType,
-                    _augmentType: 'filter.operator', _augmentedField: field.name, _augmentedOperator: operator
-                });
-            }
-        } else if ((fieldType instanceof GraphQLObjectType)) {
-            augments.push({
-                name: field.name,
-                type: ensureQueryInputType(this.schema, fieldType.name),
-                _augmentType: 'filter.nested', _augmentedField: field.name
-            });
-        }
         for (const augment of augments) {
             if (!(augment.name in filterInputTypeFields)) {
                 filterInputTypeFields[augment.name] = augment;
             }
         }
         const queryField = this.schema.getQueryType().getFields()[details.objectType.name];
-        if (!queryField) {
-            return;
+        if (queryField) {
+            for (const augment of augments) {
+                if (queryField.args.every(a => a.name !== augment.name)) {
+                    queryField.args.push(augment);
+                }
+            }
         }
-        for (const augment of augments) {
-            queryField.args.push(augment);
+        for (const type of Object.values(this.schema.getTypeMap())) {
+            if (type instanceof GraphQLObjectType) {
+                for (const typeField of Object.values(type.getFields())) {
+                    if (typeField._augmentResult && getNamedType(typeField.type).name === details.objectType.name) {
+                        for (const augment of augments) {
+                            if (typeField.args.every(a => a.name !== augment.name)) {
+                                typeField.args.push(augment);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -97,4 +118,5 @@ module.exports = {
     Query,
 
     ensureQueryInputType,
+    augmentField,
 };
