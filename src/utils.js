@@ -64,22 +64,25 @@ function getJwtPayload(jwtPayload, schema, silent) {
 }
 
 
-function sideCar(obj, extra, key) {
-    key = key || '_extra';
-    return new Proxy(obj, {
-        get(target, p, receiver) {
-            if (p === key) {
-                return extra;
-            } else {
-                const v = Reflect.get(target, p, receiver);
-                if (typeof v === 'object' && v !== null && v.constructor === Object) {
-                    return sideCar(v, extra);
+function sideCar(obj, extra, key = '_extra') {
+    if (Array.isArray(obj)) {
+        return obj.map(o => sideCar(o, extra, key));
+    } else if (obj instanceof Date) {
+        return obj;
+    } else if (typeof obj === 'object' && obj) {
+        return new Proxy(obj, {
+            get(target, p, receiver) {
+                if (p === key) {
+                    return extra;
                 } else {
-                    return v;
+                    const v = Reflect.get(target, p, receiver);
+                    return sideCar(v);
                 }
             }
-        }
-    });
+        });
+    } else {
+        return obj;
+    }
 }
 
 

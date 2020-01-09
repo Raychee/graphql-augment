@@ -93,8 +93,14 @@ class AugmentedArgResolver {
         const type = schema.getType(typeName);
         const commonResolverOptions = {type, mode, parent, parentType, parentField: field, args, env};
         let ctx = existingCtx || await this.resolvers.init(parentCtx, commonResolverOptions);
+        if (parent) {
+            await checkAuth(
+                ctx, jwtPayload, (field._auth || {})[mode], this.resolvers.auth,
+                {type: parentType, field, mode, args, env}
+            );
+        }
         await checkAuth(
-            ctx, jwtPayload, type._auth && type._auth[mode], this.resolvers.auth,
+            ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
             commonResolverOptions
         );
         let extra = {}, ctxs = [], processed = false;
