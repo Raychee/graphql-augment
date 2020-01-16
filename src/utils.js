@@ -2,7 +2,7 @@ const {AuthenticationError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
 
 
-async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, field, ...options}) {
+async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, field, ...options} = {}) {
     if (auth) {
         let authMessage;
         if (checkAuthFn) {
@@ -29,22 +29,27 @@ async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, fiel
 }
 
 
-function getJwtPayload(jwtPayload, schema, silent) {
-    if (typeof jwtPayload === 'object' && jwtPayload && jwtPayload.req) {
-        jwtPayload = jwtPayload.req;
+function getJwtPayload(jwtPayload, auth, silent) {
+    for (const guess of ['req', 'jwt', 'headers', 'header', 'authorization']) {
+        if (typeof jwtPayload === 'object' && jwtPayload) {
+            jwtPayload = jwtPayload[guess];
+        } else {
+            break;
+        }
     }
-    if (typeof jwtPayload === 'object' && jwtPayload && jwtPayload.headers) {
-        jwtPayload = jwtPayload.headers.authorization;
-    }
-    if (typeof jwtPayload === 'string' && jwtPayload.startsWith('Bearer ')) {
-        jwtPayload = jwtPayload.slice(7);
+    for (const guess of ['schema', '_auth']) {
+        if (typeof auth === 'object' && auth) {
+            auth = auth[guess];
+        } else {
+            break;
+        }
     }
     if (typeof jwtPayload === 'string') {
-        if (schema.schema) {
-            schema = schema.schema;
+        if (jwtPayload.startsWith('Bearer ')) {
+            jwtPayload = jwtPayload.slice(7);
         }
-        if (schema && schema._auth) {
-            const {secret, options} = schema._auth;
+        if (typeof auth === 'object' && auth && auth.secret) {
+            const {secret, options} = auth._auth;
             try {
                 jwtPayload = jwt.verify(jwtPayload, secret, options);
             } catch (e) {
