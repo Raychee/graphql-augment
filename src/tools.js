@@ -22,9 +22,8 @@ class AugmentedArgResolver {
 
     async resolve(parent, args, context, info) {
         const env = {parent, args, context, info};
-        const {jwt} = context;
         const {fieldName, schema, parentType} = info;
-        const jwtPayload = getJwtPayload(jwt, schema);
+        const jwtPayload = getJwtPayload(context, schema);
         let field, typeName, mode, useResultType = false;
         if (parent) {
             field = parentType.getFields()[fieldName];
