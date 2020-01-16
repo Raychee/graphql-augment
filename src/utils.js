@@ -32,14 +32,18 @@ async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, fiel
 function getJwtPayload(jwtPayload, auth, silent) {
     for (const guess of ['req', 'jwt', 'headers', 'header', 'authorization']) {
         if (typeof jwtPayload === 'object' && jwtPayload) {
-            jwtPayload = jwtPayload[guess];
+            if (jwtPayload[guess]) {
+                jwtPayload = jwtPayload[guess];
+            }
         } else {
             break;
         }
     }
     for (const guess of ['schema', '_auth']) {
         if (typeof auth === 'object' && auth) {
-            auth = auth[guess];
+            if (auth[guess]) {
+                auth = auth[guess];
+            }
         } else {
             break;
         }
