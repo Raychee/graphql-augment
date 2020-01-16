@@ -53,7 +53,7 @@ function getJwtPayload(jwtPayload, auth, silent) {
             jwtPayload = jwtPayload.slice(7);
         }
         if (typeof auth === 'object' && auth && auth.secret) {
-            const {secret, options} = auth._auth;
+            const {secret, options} = auth;
             try {
                 jwtPayload = jwt.verify(jwtPayload, secret, options);
             } catch (e) {
