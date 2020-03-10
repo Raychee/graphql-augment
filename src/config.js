@@ -20,4 +20,14 @@ module.exports = {
     MODE_UPSERT: 'upsert',
     MODE_RESULT: 'result',
 
+    DEFAULT_OPERATORS: {
+        Boolean: ['is'],
+        Float: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte'],
+        Int: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte'],
+        String: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'regex', 'not_regex'],
+        ID: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'regex', 'not_regex'],
+        JSONObject: ['is'],
+        DateTime: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte'],
+    },
+
 };

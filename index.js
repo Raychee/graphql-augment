@@ -21,6 +21,9 @@ const config = require('./src/config');
 
 
 module.exports = {
+    setConfig: (conf) => {
+        Object.assign(config, conf);
+    },
     makeSchemaDirectives: () => ({
         [config.MODE_QUERY]: Query,
         [config.MODE_INSERT]: Insert,
@@ -36,8 +39,6 @@ module.exports = {
 
     AugmentedArgResolver,
     ResultResolver,
-
-    config,
 
     checkAuth,
     getJwtPayload,

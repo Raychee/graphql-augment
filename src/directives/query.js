@@ -1,27 +1,14 @@
 const {SchemaDirectiveVisitor} = require('graphql-tools');
 const {
-    isInputType, getNamedType,
-    GraphQLBoolean, GraphQLInt, GraphQLFloat, GraphQLString, GraphQLID, GraphQLList,
+    isInputType, getNamedType, GraphQLList,
     GraphQLInputObjectType, GraphQLObjectType,
 } = require('graphql');
-const {GraphQLDateTime} = require('graphql-iso-date');
-const {GraphQLJSONObject} = require('graphql-type-json');
 
 const config = require('../config');
 
 
 function getEligibleOperators(type) {
-    const operators = ['is'];
-    if ([GraphQLBoolean, GraphQLJSONObject].map(t => t.name).indexOf(type.name) < 0) {
-        operators.push('not', 'in', 'not_in');
-    }
-    if ([GraphQLFloat, GraphQLInt, GraphQLString, GraphQLID, GraphQLDateTime].map(t => t.name).indexOf(type.name) >= 0) {
-        operators.push('gt', 'gte', 'lt', 'lte');
-    }
-    if ([GraphQLString, GraphQLID].map(t => t.name).indexOf(type.name) >= 0) {
-        operators.push('regex', 'not_regex');
-    }
-    return operators;
+    return config.DEFAULT_OPERATORS[type.name] || [];
 }
 
 
@@ -46,7 +33,13 @@ function augmentField(schema, field) {
     const fieldType = getNamedType(field.type);
     const augments = [];
     if (isInputType(fieldType)) {
-        const operators = field._augmentQuery.op || getEligibleOperators(fieldType);
+        let operators = field._augmentQuery.op || getEligibleOperators(fieldType);
+        if (field._augmentQuery.opExtend) {
+            operators = [...operators, ...field._augmentQuery.opExtend];
+        }
+        if (field._augmentQuery.opExclude) {
+            operators = operators.filter(op => !field._augmentQuery.opExclude.includes(op));
+        }
         for (const operator of operators) {
             const filterInputTypeFieldName = operator === 'is' ?
                 field.name : `${field.name}_${operator}`;
