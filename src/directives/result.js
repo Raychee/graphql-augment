@@ -80,7 +80,7 @@ function ensureResultType(schema, fieldType) {
                         if (arg instanceof ResultResolver) {
                             return await arg.getCount();
                         } else {
-                            return defaultFieldResolver.call(this, arg, args);
+                            return defaultFieldResolver.call(this, arg, ...args);
                         }
                     }
                 },
@@ -90,7 +90,7 @@ function ensureResultType(schema, fieldType) {
                         if (arg instanceof ResultResolver) {
                             return await arg.getDebugInfo();
                         } else {
-                            return defaultFieldResolver.call(this, arg, args);
+                            return defaultFieldResolver.call(this, arg, ...args);
                         }
                     }
                 }
