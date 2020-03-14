@@ -26,6 +26,7 @@ module.exports = {
         Int: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte'],
         String: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'regex', 'not_regex'],
         ID: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte', 'regex', 'not_regex'],
+        Enum: ['is', 'not', 'in', 'not_in'],
         JSONObject: ['is'],
         DateTime: ['is', 'not', 'in', 'not_in', 'gt', 'gte', 'lt', 'lte'],
     },

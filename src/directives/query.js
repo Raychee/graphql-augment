@@ -1,14 +1,16 @@
 const {SchemaDirectiveVisitor} = require('graphql-tools');
 const {
     isInputType, getNamedType, GraphQLList,
-    GraphQLInputObjectType, GraphQLObjectType,
+    GraphQLInputObjectType, GraphQLObjectType, GraphQLEnumType,
 } = require('graphql');
 
 const config = require('../config');
 
 
 function getEligibleOperators(type) {
-    return config.DEFAULT_OPERATORS[type.name] || [];
+    let typeName = type.name;
+    if (type instanceof GraphQLEnumType) typeName = 'Enum';
+    return config.DEFAULT_OPERATORS[typeName] || [];
 }
 
 
