@@ -1,4 +1,4 @@
-const {AuthenticationError} = require('apollo-server-errors');
+const {AuthenticationError, ForbiddenError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
 
 
@@ -22,7 +22,7 @@ async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, fiel
             if (silent) {
                 return authMessage;
             } else {
-                throw new AuthenticationError(authMessage);
+                throw new ForbiddenError(authMessage);
             }
         }
     }
