@@ -8,21 +8,28 @@ async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, fiel
         if (checkAuthFn) {
             authMessage = await checkAuthFn(ctx, jwtPayload, auth, {type, field, ...options});
         } else {
-            authMessage = false;
+            authMessage = true;
         }
         if (typeof authMessage === 'boolean' && !authMessage) {
             authMessage = ' ';
         }
         if (authMessage) {
-            if (field) {
-                authMessage = `field "${field.name}" of type "${type.name}" is not authorized: ${authMessage}`;
-            } else if (type) {
-                authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
+            let errorType;
+            if (jwtPayload) {
+                if (field) {
+                    authMessage = `field "${field.name}" of type "${type.name}" is not authorized: ${authMessage}`;
+                } else if (type) {
+                    authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
+                }
+                errorType = ForbiddenError;
+            } else {
+                authMessage = `authentication failed: ${authMessage}`;
+                errorType = AuthenticationError;
             }
             if (silent) {
                 return authMessage;
             } else {
-                throw new ForbiddenError(authMessage);
+                throw new errorType(authMessage);
             }
         }
     }
