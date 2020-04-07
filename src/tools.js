@@ -60,13 +60,13 @@ class AugmentedArgResolver {
             }
         }
         return await this._resolve(
-            args, schema, env, {field, typeName, useResultType, mode, parent, parentType, jwtPayload}
+            args, schema, env, {field, typeName, useResultType, mode, jwtPayload}
         );
     }
 
     async _resolve(
         args, schema, env, {
-            field, typeName, useResultType, mode, parent, parentType, jwtPayload, parentCtx, existingCtx,
+            field, typeName, mode, jwtPayload, parent, parentType, existingCtx, useResultType,
         }
     ) {
         let augmentedSchemaArgs;
@@ -88,14 +88,8 @@ class AugmentedArgResolver {
         }
 
         const type = schema.getType(typeName);
-        const commonResolverOptions = {type, mode, parent, parentType, parentField: field, args, env};
-        let ctx = existingCtx || await this.resolvers.init(parentCtx, commonResolverOptions);
-        if (parent) {
-            await checkAuth(
-                ctx, jwtPayload, (field._auth || {})[mode], this.resolvers.auth,
-                {type: parentType, field, mode, args, env}
-            );
-        }
+        const commonResolverOptions = {type, mode, args, env, parent, parentType};
+        let ctx = existingCtx || await this.resolvers.init(parent, commonResolverOptions);
         await checkAuth(
             ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
             commonResolverOptions
@@ -137,7 +131,7 @@ class AugmentedArgResolver {
                             augmentedArg._augmentedField,
                             await this._resolve(
                                 argValue, schema, env,
-                                {typeName: augmentedArg.type.name, jwtPayload, parentCtx: ctx}
+                                {typeName: augmentedArg.type.name, mode, jwtPayload, parent: ctx, parentType: type}
                             ),
                             resolverOptions,
                         ) || ctx;
@@ -148,9 +142,9 @@ class AugmentedArgResolver {
                     if (Array.isArray(argValue)) {
                         const subTypeName = getNamedType(augmentedArg.type).name;
                         for (const arg of argValue) {
-                            let ictx = await this.resolvers.init(parentCtx, commonResolverOptions);
+                            let ictx = await this.resolvers.init(parent, commonResolverOptions);
                             ictx = await this._resolve(arg, schema, env, {
-                                typeName: subTypeName, jwtPayload, parentCtx, existingCtx: ictx, parent
+                                typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
                             });
                             ctxs.push(ictx);
                         }
@@ -187,10 +181,10 @@ class AugmentedArgResolver {
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
                             for (const argV of argValue) {
-                                let ictx = await this.resolvers.init(parentCtx, commonResolverOptions);
+                                let ictx = await this.resolvers.init(parent, commonResolverOptions);
                                 ictx = await this._resolve(argV, schema, env, {
-                                    typeName: getNamedType(augmentedArg.type).name, jwtPayload,
-                                    parentCtx: ctx, existingCtx: ictx,
+                                    typeName: getNamedType(augmentedArg.type).name,
+                                    mode, jwtPayload, parent: ctx, parentType: type, existingCtx: ictx,
                                 });
                                 tctxs.push(ictx);
                             }
@@ -202,7 +196,8 @@ class AugmentedArgResolver {
                                 augmentedArg._augmentedField,
                                 await this._resolve(
                                     argValue, schema, env, {
-                                        typeName: augmentedArg.type.name, jwtPayload, parentCtx: ctx,
+                                        typeName: augmentedArg.type.name,
+                                        mode, jwtPayload, parent: ctx, parentType: type
                                     }
                                 ),
                                 resolverOptions,
@@ -220,10 +215,10 @@ class AugmentedArgResolver {
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
                             for (const argV of argValue) {
-                                let ictx = await this.resolvers.init(parentCtx, commonResolverOptions);
+                                let ictx = await this.resolvers.init(parent, commonResolverOptions);
                                 ictx = await this._resolve({[augmentedArg._augmentedKey]: argV}, schema, env, {
-                                    typeName: augmentedArg._augmentedObjectTypeName, jwtPayload,
-                                    parentCtx: ctx, existingCtx: ictx,
+                                    typeName: augmentedArg._augmentedObjectTypeName,
+                                    mode, jwtPayload, parent: ctx, parentType: type, existingCtx: ictx,
                                 });
                                 tctxs.push(ictx);
                             }
@@ -236,7 +231,7 @@ class AugmentedArgResolver {
                                 augmentedArg._augmentedField,
                                 await this._resolve({[augmentedArg._augmentedKey]: argValue}, schema, env, {
                                     typeName: augmentedArg._augmentedObjectTypeName,
-                                    jwtPayload, parentCtx: ctx,
+                                    mode, jwtPayload, parent: ctx, parentType: type
                                 }),
                                 resolverOptions,
                             ) || ctx;
@@ -248,9 +243,9 @@ class AugmentedArgResolver {
                     if (Array.isArray(argValue)) {
                         const subTypeName = getNamedType(augmentedArg.type).name;
                         for (const argV of argValue) {
-                            let ictx = await this.resolvers.init(parentCtx, commonResolverOptions);
+                            let ictx = await this.resolvers.init(parent, commonResolverOptions);
                             ictx = await this._resolve(argV, schema, env, {
-                                typeName: subTypeName, jwtPayload, parentCtx, existingCtx: ictx,
+                                typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
                             });
                             ctxs.push(ictx);
                         }
@@ -267,7 +262,7 @@ class AugmentedArgResolver {
         if (existingCtx) {
             return ctx;
         }
-        if (parentCtx) {
+        if (parent) {
             return await this.resolvers.resolve(ctx, commonResolverOptions);
         }
         if (processed || ctxs.length <= 0) {
