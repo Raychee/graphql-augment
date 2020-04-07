@@ -6,13 +6,6 @@ const {ResultResolver} = require('./directives/result');
 const {checkAuth, getJwtPayload} = require('./utils');
 
 
-const ALL_MUTATION_MODES = {
-    [config.FIELD_PREFIX_INSERT]: config.MODE_INSERT,
-    [config.FIELD_PREFIX_UPDATE]: config.MODE_UPDATE,
-    [config.FIELD_PREFIX_UPSERT]: config.MODE_UPSERT,
-};
-
-
 class AugmentedArgResolver {
 
     constructor(resolvers, {depthFirst = false} = {}) {
@@ -32,7 +25,12 @@ class AugmentedArgResolver {
             }
             mode = config.MODE_QUERY;
         } else {
-            const prefixMutation = Object.keys(ALL_MUTATION_MODES).find(p => fieldName.startsWith(p));
+            const allMutationModes =  {
+                [config.FIELD_PREFIX_INSERT]: config.MODE_INSERT,
+                [config.FIELD_PREFIX_UPDATE]: config.MODE_UPDATE,
+                [config.FIELD_PREFIX_UPSERT]: config.MODE_UPSERT,
+            };
+            const prefixMutation = Object.keys(allMutationModes).find(p => fieldName.startsWith(p));
             const prefixQuery = fieldName.startsWith(config.FIELD_PREFIX_QUERY) ? config.FIELD_PREFIX_QUERY : undefined;
             if (prefixMutation) {
                 const mutationType = schema.getMutationType();
@@ -42,7 +40,7 @@ class AugmentedArgResolver {
                 if (!field) {
                     throw new UserInputError(`mutation type "${fieldName}" is not valid`);
                 }
-                mode = ALL_MUTATION_MODES[prefixMutation];
+                mode = allMutationModes[prefixMutation];
                 typeName = fieldName.slice(prefixMutation.length);
             } else if (prefixQuery !== undefined) {
                 const queryType = schema.getQueryType();
@@ -62,7 +60,7 @@ class AugmentedArgResolver {
             }
         }
         return await this._resolve(
-             args, schema, env,{field, typeName, useResultType, mode, parent, parentType, jwtPayload}
+            args, schema, env, {field, typeName, useResultType, mode, parent, parentType, jwtPayload}
         );
     }
 
