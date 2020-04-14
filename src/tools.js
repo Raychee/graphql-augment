@@ -71,7 +71,7 @@ class AugmentedArgResolver {
     ) {
         let augmentedSchemaArgs;
         if (field) {
-            augmentedSchemaArgs = field.args.filter(a => a._augmentType);
+            augmentedSchemaArgs = field.args;
         } else {
             const type = schema.getType(typeName);
             if (!type) {
@@ -81,7 +81,7 @@ class AugmentedArgResolver {
                 typeName = type._augmentedTypeName;
             }
             mode = type._augmentedMode;
-            augmentedSchemaArgs = Object.values(type.getFields()).filter(a => a._augmentType);
+            augmentedSchemaArgs = Object.values(type.getFields());
         }
         if (!typeName) {
             typeName = getNamedType(field.type).name;
@@ -97,7 +97,7 @@ class AugmentedArgResolver {
         let extra = {}, ctxs = [], processed = false;
         const plain = [], nested = [];
         for (const augmentedArg of augmentedSchemaArgs) {
-            if (['filter.nested', 'input.nested'].indexOf(augmentedArg._augmentType) >= 0) {
+            if (['filter.nested', 'input.nested'].includes(augmentedArg._augmentType)) {
                 nested.push({augmentedArg, argValue: args[augmentedArg.name]});
             } else {
                 plain.push({augmentedArg, argValue: args[augmentedArg.name]});
