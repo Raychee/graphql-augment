@@ -3,34 +3,32 @@ const jwt = require('jsonwebtoken');
 
 
 async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, field, ...options} = {}) {
-    if (auth) {
-        let authMessage;
-        if (checkAuthFn) {
-            authMessage = await checkAuthFn(ctx, jwtPayload, auth, {type, field, ...options});
+    let authMessage;
+    if (checkAuthFn) {
+        authMessage = await checkAuthFn(ctx, jwtPayload, auth, {type, field, ...options});
+    } else {
+        authMessage = true;
+    }
+    if (typeof authMessage === 'boolean') {
+        authMessage = authMessage ? '' : ' ';
+    }
+    if (authMessage) {
+        let errorType;
+        if (jwtPayload) {
+            if (field) {
+                authMessage = `field "${field.name}" of type "${type.name}" is not authorized: ${authMessage}`;
+            } else if (type) {
+                authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
+            }
+            errorType = ForbiddenError;
         } else {
-            authMessage = true;
+            authMessage = `authentication failed: ${authMessage}`;
+            errorType = AuthenticationError;
         }
-        if (typeof authMessage === 'boolean' && !authMessage) {
-            authMessage = ' ';
-        }
-        if (authMessage) {
-            let errorType;
-            if (jwtPayload) {
-                if (field) {
-                    authMessage = `field "${field.name}" of type "${type.name}" is not authorized: ${authMessage}`;
-                } else if (type) {
-                    authMessage = `type "${type.name}" is not authorized: ${authMessage}`;
-                }
-                errorType = ForbiddenError;
-            } else {
-                authMessage = `authentication failed: ${authMessage}`;
-                errorType = AuthenticationError;
-            }
-            if (silent) {
-                return authMessage;
-            } else {
-                throw new errorType(authMessage);
-            }
+        if (silent) {
+            return authMessage;
+        } else {
+            throw new errorType(authMessage);
         }
     }
 }

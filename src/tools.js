@@ -265,9 +265,7 @@ class AugmentedArgResolver {
         if (parent) {
             return await this.resolvers.resolve(ctx, commonResolverOptions);
         }
-        if (processed || ctxs.length <= 0) {
-            ctxs.unshift(ctx);
-        }
+        ctxs.unshift(ctx);
         if (extra[config.ARG_NAME_PAGESIZE] !== undefined) {
             const limit = extra[config.ARG_NAME_PAGESIZE];
             delete extra[config.ARG_NAME_PAGESIZE];
