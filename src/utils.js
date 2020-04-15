@@ -83,7 +83,7 @@ function sideCar(obj, extra, key = '_extra') {
         return obj.map(o => sideCar(o, extra, key));
     } else if (obj instanceof Date) {
         return obj;
-    } else if (typeof obj === 'object' && obj) {
+    } else if (typeof obj === 'object' && obj && obj.constructor === Object) {
         return new Proxy(obj, {
             get(target, p, receiver) {
                 if (p === key) {
