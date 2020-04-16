@@ -60,13 +60,14 @@ class AugmentedArgResolver {
             }
         }
         return await this._resolve(
-            args, schema, env, {field, typeName, useResultType, mode, jwtPayload}
+            args, schema, env, {field, typeName, useResultType, mode, jwtPayload, isFirst: true}
         );
     }
 
     async _resolve(
         args, schema, env, {
             field, typeName, mode, jwtPayload, parent, parentType, existingCtx, useResultType,
+            isInBatch, isFirst,
         }
     ) {
         let augmentedSchemaArgs;
@@ -88,13 +89,13 @@ class AugmentedArgResolver {
         }
 
         const type = schema.getType(typeName);
-        const commonResolverOptions = {type, mode, args, env, parent, parentType};
+        const commonResolverOptions = {type, mode, args, env, parent, parentType, isInBatch};
         let ctx = existingCtx || await this.resolvers.init(parent, commonResolverOptions);
         await checkAuth(
             ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
-            commonResolverOptions
+            {...commonResolverOptions, isFirst}
         );
-        let extra = {}, ctxs = [], processed = false;
+        let extra = {}, ctxs = [];
         const plain = [], nested = [];
         for (const augmentedArg of augmentedSchemaArgs) {
             if (['filter.nested', 'input.nested'].includes(augmentedArg._augmentType)) {
@@ -118,7 +119,6 @@ class AugmentedArgResolver {
                             augmentedArg._augmentedField, augmentedArg._augmentedOperator, argValue,
                             resolverOptions,
                         ) || ctx;
-                        processed = true;
                     }
                     break;
                 case "filter.nested":
@@ -135,7 +135,6 @@ class AugmentedArgResolver {
                             ),
                             resolverOptions,
                         ) || ctx;
-                        processed = true;
                     }
                     break;
                 case "filter.filters":
@@ -145,6 +144,7 @@ class AugmentedArgResolver {
                             let ictx = await this.resolvers.init(parent, commonResolverOptions);
                             ictx = await this._resolve(arg, schema, env, {
                                 typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
+                                isInBatch: true,
                             });
                             ctxs.push(ictx);
                         }
@@ -169,7 +169,6 @@ class AugmentedArgResolver {
                         ctx = await this.resolvers.input(
                             ctx, augmentedArg._augmentedField, argValue, resolverOptions,
                         ) || ctx;
-                        processed = true;
                     }
                     break;
                 case "input.nested":
@@ -203,7 +202,6 @@ class AugmentedArgResolver {
                                 resolverOptions,
                             ) || ctx;
                         }
-                        processed = true;
                     }
                     break;
                 case "input.nestedKey":
@@ -236,7 +234,6 @@ class AugmentedArgResolver {
                                 resolverOptions,
                             ) || ctx;
                         }
-                        processed = true;
                     }
                     break;
                 case "input.inputs":
@@ -246,6 +243,7 @@ class AugmentedArgResolver {
                             let ictx = await this.resolvers.init(parent, commonResolverOptions);
                             ictx = await this._resolve(argV, schema, env, {
                                 typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
+                                isInBatch: true,
                             });
                             ctxs.push(ictx);
                         }
@@ -254,7 +252,6 @@ class AugmentedArgResolver {
                 default:
                     if (augmentedArg.name in args && this.resolvers.others) {
                         ctx = await this.resolvers.others(ctx, augmentedArg.name, argValue, resolverOptions) || ctx;
-                        processed = true;
                     }
                     break;
             }
@@ -263,6 +260,10 @@ class AugmentedArgResolver {
             return ctx;
         }
         if (parent) {
+            await checkAuth(
+                ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
+                {...commonResolverOptions, isBeforeResolve: true}
+            );
             return await this.resolvers.resolve(ctx, commonResolverOptions);
         }
         ctxs.unshift(ctx);
@@ -278,6 +279,11 @@ class AugmentedArgResolver {
                 extra[config.ARG_NAME_OFFSET] = extra[config.ARG_NAME_LIMIT] * (page - 1);
             }
         }
+
+        await checkAuth(
+            ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
+            {...commonResolverOptions, isBeforeReturn: true}
+        );
         const result = new ResultResolver(
             this.resolvers, ctxs, extra, jwtPayload, commonResolverOptions
         );
