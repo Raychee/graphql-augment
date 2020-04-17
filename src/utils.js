@@ -1,3 +1,4 @@
+const debug = require('debug')('graphql-augment:utils');
 const {AuthenticationError, ForbiddenError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
 
@@ -35,6 +36,7 @@ async function checkAuth(ctx, jwtPayload, auth, checkAuthFn, {silent, type, fiel
 
 
 function getJwtPayload(jwtPayload, auth, silent) {
+    debug('guess jwtPayload from %j', jwtPayload);
     for (const guess of ['req', 'jwt', 'headers', 'header', 'authorization']) {
         if (typeof jwtPayload === 'object' && jwtPayload) {
             if (jwtPayload[guess]) {
@@ -44,6 +46,8 @@ function getJwtPayload(jwtPayload, auth, silent) {
             break;
         }
     }
+    debug('guessed jwtPayload: %j', jwtPayload);
+    debug('guess auth from %j', auth);
     for (const guess of ['schema', '_auth']) {
         if (typeof auth === 'object' && auth) {
             if (auth[guess]) {
@@ -53,6 +57,7 @@ function getJwtPayload(jwtPayload, auth, silent) {
             break;
         }
     }
+    debug('guessed auth: %j', auth);
     if (typeof jwtPayload === 'string') {
         if (jwtPayload.startsWith('Bearer ')) {
             jwtPayload = jwtPayload.slice(7);

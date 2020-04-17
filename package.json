@@ -1,6 +1,6 @@
 {
   "name": "graphql-augment",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "",
   "main": "index.js",
   "repository": {
@@ -16,6 +16,7 @@
   "homepage": "https://github.com/Raychee/graphql-augment#readme",
   "dependencies": {
     "apollo-server-errors": "^2.3.1",
+    "debug": "^4.1.1",
     "graphql": "^14.4.2",
     "graphql-iso-date": "^3.6.1",
     "graphql-tools": "^4.0.5",
