@@ -63,14 +63,20 @@ function ensureAuthFieldResolvers(type) {
         field.resolve = async function (parent, args, context, info) {
             const extra = parent && parent._extra;
             const env = {parent, args, context, info};
-            const options = {type, mode: config.MODE_RESULT, args, env};
+            const options = {
+                type, mode: config.MODE_RESULT, args, env,
+                auth: type._auth && type._auth[config.MODE_RESULT]
+            };
             if (extra) {
                 const {jwt: jwtPayload, auth: checkAuthFn} = extra;
-                    const typeAuth = type._auth && type._auth[config.MODE_RESULT];
-                    await checkAuth({}, jwtPayload, typeAuth, checkAuthFn, options);
+                await checkAuth({}, jwtPayload, checkAuthFn, options);
                 const message = await checkAuth(
-                    {}, jwtPayload, (field._auth || {})[config.MODE_RESULT], checkAuthFn,
-                    {field, silent: (field._auth || {}).silent, ...options},
+                    {}, jwtPayload, checkAuthFn,
+                    {
+                        ...options,
+                        field, silent: (field._auth || {}).silent,
+                        auth: (field._auth || {})[config.MODE_RESULT]
+                    },
                 );
                 if (message) {
                     return getDefaultValue(field.type);

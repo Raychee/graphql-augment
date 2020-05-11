@@ -25,7 +25,7 @@ class AugmentedArgResolver {
             }
             mode = config.MODE_QUERY;
         } else {
-            const allMutationModes =  {
+            const allMutationModes = {
                 [config.FIELD_PREFIX_INSERT]: config.MODE_INSERT,
                 [config.FIELD_PREFIX_UPDATE]: config.MODE_UPDATE,
                 [config.FIELD_PREFIX_UPSERT]: config.MODE_UPSERT,
@@ -92,8 +92,8 @@ class AugmentedArgResolver {
         const commonResolverOptions = {type, mode, args, env, parent, parentType, isInBatch};
         let ctx = existingCtx || await this.resolvers.init(parent, commonResolverOptions);
         await checkAuth(
-            ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
-            {...commonResolverOptions, isFirst}
+            ctx, jwtPayload, this.resolvers.auth,
+            {...commonResolverOptions, auth: (type._auth || {})[mode], isFirst}
         );
         let extra = {}, ctxs = [];
         const plain = [], nested = [];
@@ -106,14 +106,18 @@ class AugmentedArgResolver {
         }
         const process = this.depthFirst ? [...nested, ...plain] : [...plain, ...nested];
         for (const {augmentedArg, argValue} of process) {
-            const targetField = augmentedArg._augmentedField && type.getFields()[augmentedArg._augmentedField];
-            const resolverOptions = {...commonResolverOptions, field: targetField};
-            switch (augmentedArg._augmentType) {
+            const arg = augmentedArg.name;
+            const field = augmentedArg._augmentedField && type.getFields()[augmentedArg._augmentedField];
+            const auth = field && (field._auth || {})[mode];
+            const fieldMode = augmentedArg._augmentType;
+            const resolverOptions = {...commonResolverOptions, arg, field, auth, fieldMode};
+            switch (fieldMode) {
                 case "filter.operator":
                     if (augmentedArg.name in args && this.resolvers.filter) {
+                        const operator = augmentedArg._augmentedOperator;
                         await checkAuth(
-                            ctx, jwtPayload, (targetField._auth || {})[mode], this.resolvers.auth,
-                            resolverOptions,
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, operator, value: argValue}
                         );
                         ctx = await this.resolvers.filter(ctx,
                             augmentedArg._augmentedField, augmentedArg._augmentedOperator, argValue,
@@ -124,8 +128,8 @@ class AugmentedArgResolver {
                 case "filter.nested":
                     if (typeof argValue === 'object' && this.resolvers.nested) {
                         await checkAuth(
-                            ctx, jwtPayload, (targetField._auth || {})[mode], this.resolvers.auth,
-                            resolverOptions,
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, value: argValue}
                         );
                         ctx = await this.resolvers.nested(ctx,
                             augmentedArg._augmentedField,
@@ -163,8 +167,8 @@ class AugmentedArgResolver {
                 case "input.field":
                     if (augmentedArg.name in args && this.resolvers.input) {
                         await checkAuth(
-                            ctx, jwtPayload, (targetField._auth || {})[mode], this.resolvers.auth,
-                            resolverOptions
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, value: argValue},
                         );
                         ctx = await this.resolvers.input(
                             ctx, augmentedArg._augmentedField, argValue, resolverOptions,
@@ -174,8 +178,8 @@ class AugmentedArgResolver {
                 case "input.nested":
                     if (typeof argValue === 'object' && this.resolvers.nested) {
                         await checkAuth(
-                            ctx, jwtPayload, (targetField._auth || {})[mode], this.resolvers.auth,
-                            resolverOptions,
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, value: argValue}
                         );
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
@@ -207,8 +211,8 @@ class AugmentedArgResolver {
                 case "input.nestedKey":
                     if (augmentedArg.name in args && this.resolvers.nested) {
                         await checkAuth(
-                            ctx, jwtPayload, (targetField._auth || {})[mode], this.resolvers.auth,
-                            resolverOptions,
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, value: argValue},
                         );
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
@@ -251,6 +255,10 @@ class AugmentedArgResolver {
                     break;
                 default:
                     if (augmentedArg.name in args && this.resolvers.others) {
+                        await checkAuth(
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, value: argValue},
+                        );
                         ctx = await this.resolvers.others(ctx, augmentedArg.name, argValue, resolverOptions) || ctx;
                     }
                     break;
@@ -261,8 +269,8 @@ class AugmentedArgResolver {
         }
         if (parent) {
             await checkAuth(
-                ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
-                {...commonResolverOptions, isBeforeResolve: true}
+                ctx, jwtPayload, this.resolvers.auth,
+                {...commonResolverOptions, auth: (type._auth || {})[mode], isBeforeResolve: true}
             );
             return await this.resolvers.resolve(ctx, commonResolverOptions);
         }
@@ -281,8 +289,12 @@ class AugmentedArgResolver {
         }
 
         await checkAuth(
-            ctx, jwtPayload, (type._auth || {})[mode], this.resolvers.auth,
-            {...commonResolverOptions, isBeforeReturn: true}
+            ctx, jwtPayload, this.resolvers.auth,
+            {
+                ...extra,
+                ...commonResolverOptions, 
+                auth: (type._auth || {})[mode], isBeforeReturn: true
+            },
         );
         const result = new ResultResolver(
             this.resolvers, ctxs, extra, jwtPayload, commonResolverOptions

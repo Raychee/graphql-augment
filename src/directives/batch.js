@@ -39,7 +39,7 @@ class Batch extends SchemaDirectiveVisitor {
             const allPrefixes = [config.FIELD_PREFIX_INSERT, config.FIELD_PREFIX_UPDATE, config.FIELD_PREFIX_UPSERT];
             const prefix = allPrefixes.find(p => field.name.startsWith(p));
             if (!prefix) {
-                throw new Error(`directive "@batch" should be only used on root mutation fields that start with any of the following: ${allPrefixes.join(', ')}`);
+                throw new Error(`the root mutation fields where directive "@batch" is applied should start with any of the following: ${allPrefixes.join(', ')}`);
             }
             const typeName = field.name.slice(prefix.length);
             if (!this.schema.getType(typeName)) {
@@ -70,7 +70,10 @@ class Batch extends SchemaDirectiveVisitor {
             let targetField, typeName;
             if (details.objectType === this.schema.getQueryType()) {
                 targetField = field;
-                typeName = field.name;
+                if (!field.name.startsWith(config.FIELD_PREFIX_QUERY)) {
+                    throw new Error(`the root query fields where directive "@batch" is applied should start with ${config.FIELD_PREFIX_QUERY}`);
+                }
+                typeName = field.name.slice(config.FIELD_PREFIX_QUERY.length);
             } else if (field._augmentResult) {
                 targetField = field;
                 typeName = getNamedType(field.type).name;
