@@ -9,6 +9,15 @@ const {checkAuth, getJwtPayload} = require('./utils');
 class AugmentedArgResolver {
 
     constructor(resolvers, {depthFirst = false} = {}) {
+        if (!resolvers.init) {
+            resolvers = {
+                init() {return {};},
+                others(ctx, arg, value) {ctx[arg] = value;},
+                paginate(ctx, pagination) {Object.assign(ctx, pagination);},
+                sort(ctx, sort) {ctx.sort = sort;},
+                ...resolvers
+            };
+        }
         this.resolvers = resolvers;
         this.depthFirst = depthFirst;
     }
@@ -24,35 +33,25 @@ class AugmentedArgResolver {
                 throw new UserInputError(`field "${fieldName}" from type "${parentType.name}" is not valid`);
             }
             mode = config.MODE_QUERY;
+            typeName = getNamedType(field.type).name;
         } else {
-            const allMutationModes = {
-                [config.FIELD_PREFIX_INSERT]: config.MODE_INSERT,
-                [config.FIELD_PREFIX_UPDATE]: config.MODE_UPDATE,
-                [config.FIELD_PREFIX_UPSERT]: config.MODE_UPSERT,
-            };
-            const prefixMutation = Object.keys(allMutationModes).find(p => fieldName.startsWith(p));
-            const prefixQuery = fieldName.startsWith(config.FIELD_PREFIX_QUERY) ? config.FIELD_PREFIX_QUERY : undefined;
-            if (prefixMutation) {
-                const mutationType = schema.getMutationType();
-                if (mutationType) {
-                    field = mutationType.getFields()[fieldName];
+            const mutationType = schema.getMutationType();
+            if (mutationType) {
+                field = mutationType.getFields()[fieldName];
+                if (field) {
+                    const {type, mode: mode_} = field._augmentedMutationTarget || {};
+                    mode = mode_ || config.MODE_MUTATION;
+                    typeName = type;
                 }
-                if (!field) {
-                    throw new UserInputError(`mutation type "${fieldName}" is not valid`);
+            }
+            if (!field) {
+                field = schema.getQueryType().getFields()[fieldName];
+                if (field) {
+                    mode = config.MODE_QUERY;
+                    typeName = field._augmentedQueryTarget;
                 }
-                mode = allMutationModes[prefixMutation];
-                typeName = fieldName.slice(prefixMutation.length);
-            } else if (prefixQuery !== undefined) {
-                const queryType = schema.getQueryType();
-                if (queryType) {
-                    field = queryType.getFields()[fieldName];
-                }
-                if (!field) {
-                    throw new UserInputError(`query type "${fieldName}" is not valid`);
-                }
-                mode = config.MODE_QUERY;
-                typeName = fieldName.slice(prefixQuery.length);
-            } else {
+            }
+            if (!field) {
                 throw new UserInputError(`unknown field name "${fieldName}"`);
             }
             if (field.type._augmentType === 'result.type') {
@@ -70,32 +69,28 @@ class AugmentedArgResolver {
             isInBatch, isFirst,
         }
     ) {
-        let augmentedSchemaArgs;
+        let augmentedSchemaArgs, augmentedTypeName = undefined;
         if (field) {
             augmentedSchemaArgs = field.args;
+            augmentedTypeName = typeName;
         } else {
             const type = schema.getType(typeName);
             if (!type) {
                 throw new UserInputError(`type "${typeName}" is not valid`);
             }
-            if (type._augmentedTypeName) {
-                typeName = type._augmentedTypeName;
-            }
+            augmentedTypeName = type._augmentedTypeName;
             mode = type._augmentedMode;
             augmentedSchemaArgs = Object.values(type.getFields());
         }
-        if (!typeName) {
-            typeName = getNamedType(field.type).name;
-        }
 
-        const type = schema.getType(typeName);
+        const type = augmentedTypeName && schema.getType(augmentedTypeName);
         const commonResolverOptions = {type, mode, args, env, parent, parentType, isInBatch};
         let ctx = existingCtx || await this.resolvers.init(parent, commonResolverOptions);
         await checkAuth(
             ctx, jwtPayload, this.resolvers.auth,
-            {...commonResolverOptions, auth: (type._auth || {})[mode], isFirst}
+            {...commonResolverOptions, auth: ((type || {})._auth || {})[mode], isFirst}
         );
-        let extra = {}, ctxs = [];
+        let pagination = {}, ctxs = [];
         const plain = [], nested = [];
         for (const augmentedArg of augmentedSchemaArgs) {
             if (['filter.nested', 'input.nested'].includes(augmentedArg._augmentType)) {
@@ -107,7 +102,7 @@ class AugmentedArgResolver {
         const process = this.depthFirst ? [...nested, ...plain] : [...plain, ...nested];
         for (const {augmentedArg, argValue} of process) {
             const arg = augmentedArg.name;
-            const field = augmentedArg._augmentedField && type.getFields()[augmentedArg._augmentedField];
+            const field = augmentedArg._augmentedField && type && type.getFields()[augmentedArg._augmentedField];
             const auth = field && (field._auth || {})[mode];
             const fieldMode = augmentedArg._augmentType;
             const resolverOptions = {...commonResolverOptions, arg, field, auth, fieldMode};
@@ -156,12 +151,16 @@ class AugmentedArgResolver {
                     break;
                 case "filter.pagination":
                     if (augmentedArg.name in args) {
-                        extra[augmentedArg.name] = argValue;
+                        pagination[augmentedArg.name] = argValue;
                     }
                     break;
                 case "sort.sort":
-                    if (augmentedArg.name in args) {
-                        extra[augmentedArg.name] = argValue;
+                    if (augmentedArg.name in args && this.resolvers.sort) {
+                        await checkAuth(
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, sort: argValue}
+                        );
+                        ctx = await this.resolvers.sort(ctx, argValue, resolverOptions) || ctx;
                     }
                     break;
                 case "input.field":
@@ -264,40 +263,33 @@ class AugmentedArgResolver {
                     break;
             }
         }
+        if ((config.ARG_NAME_PAGESIZE in pagination || config.ARG_NAME_PAGE in pagination) && this.resolvers.paginate) {
+            const resolverOptions = {...commonResolverOptions, fieldMode: 'filter.pagination'}; 
+            await checkAuth(
+                ctx, jwtPayload, this.resolvers.auth,
+                {...resolverOptions, ...pagination}
+            );
+            ctx = await this.resolvers.paginate(ctx, pagination, resolverOptions) || ctx;
+        }
+        
         if (existingCtx) {
             return ctx;
         }
         if (parent) {
             await checkAuth(
                 ctx, jwtPayload, this.resolvers.auth,
-                {...commonResolverOptions, auth: (type._auth || {})[mode], isBeforeResolve: true}
+                {...commonResolverOptions, auth: ((type || {})._auth || {})[mode], isBeforeResolve: true}
             );
             return await this.resolvers.resolve(ctx, commonResolverOptions);
         }
         ctxs.unshift(ctx);
-        if (extra[config.ARG_NAME_PAGESIZE] !== undefined) {
-            const limit = extra[config.ARG_NAME_PAGESIZE];
-            delete extra[config.ARG_NAME_PAGESIZE];
-            extra[config.ARG_NAME_LIMIT] = limit;
-        }
-        if (extra[config.ARG_NAME_PAGE] !== undefined) {
-            const page = extra[config.ARG_NAME_PAGE];
-            delete extra[config.ARG_NAME_PAGE];
-            if (extra[config.ARG_NAME_LIMIT] !== undefined) {
-                extra[config.ARG_NAME_OFFSET] = extra[config.ARG_NAME_LIMIT] * (page - 1);
-            }
-        }
 
         await checkAuth(
             ctx, jwtPayload, this.resolvers.auth,
-            {
-                ...extra,
-                ...commonResolverOptions, 
-                auth: (type._auth || {})[mode], isBeforeReturn: true
-            },
+            {...commonResolverOptions, auth: ((type || {})._auth || {})[mode], isBeforeReturn: true},
         );
         const result = new ResultResolver(
-            this.resolvers, ctxs, extra, jwtPayload, commonResolverOptions
+            this.resolvers, ctxs, jwtPayload, commonResolverOptions
         );
         if (useResultType) {
             return result;

@@ -8,8 +8,8 @@ const {
 const config = require('../config');
 
 
-function ensureInputType(schema, typeName, suffix, mode) {
-    const inputTypeName = `${typeName}${suffix}Input`;
+function ensureInputType(schema, typeName, mode) {
+    const inputTypeName = `${typeName}${mode[0].toUpperCase()}${mode.slice(1)}Input`;
     let inputType = schema.getType(inputTypeName);
     if (!inputType) {
         inputType = new GraphQLInputObjectType({
@@ -25,14 +25,38 @@ function ensureInputType(schema, typeName, suffix, mode) {
 }
 
 
-function visitFieldDefinition(mode, prefix, schema, args, field, details) {
+function visitFieldDefinition(mode, schema, args, field, details) {
     if (details.objectType === schema.getQueryType()) {
         throw new Error(`directive "@${mode}" should not be used on root query fields`);
     }
     if (details.objectType === schema.getMutationType()) {
-        throw new Error(`directive "@${mode}" should not be used on root mutation fields`);
+        if (!args.type) {
+            throw new Error(`directive "@${mode}" must specify "type" when used on root mutation fields`);
+        }
+        if (field._augmentedMutationTarget) {
+            throw new Error(`directive "@${mode}" conflicts with other directives on root mutation field "${field.name}"`);
+        }
+        const existing = Object.values(schema.getMutationType().getFields())
+            .find(field => {
+                if (!field._augmentedMutationTarget) return false;
+                return field._augmentedMutationTarget.type === args.type &&
+                    field._augmentedMutationTarget.mode === mode;
+            });
+        if (existing) {
+            throw new Error(`directive "@${mode}" should be used on only 1 root mutation field for type "${args.type}"`);
+        }
+        field._augmentedMutationTarget = {mode, type: args.type};
+        let delayed = schema._augmentMutationTypeDelayed;
+        delayed = delayed && delayed[mode] && delayed[mode][args.type];
+        for (const fn of delayed || []) {
+            fn(field);
+        }
+        for (const fn of field._augmentDelayed || []) {
+            fn();
+        }
+        return;
     }
-    const inputTypeFields = ensureInputType(schema, details.objectType.name, prefix, mode).getFields();
+    const inputTypeFields = ensureInputType(schema, details.objectType.name, mode).getFields();
     const fieldType = getNamedType(field.type);
     const augment = {
         name: field.name,
@@ -43,7 +67,7 @@ function visitFieldDefinition(mode, prefix, schema, args, field, details) {
         augment._augmentedField = field.name;
         augment.type = getNullableType(field.type);
     } else if ((fieldType instanceof GraphQLObjectType)) {
-        let augType = ensureInputType(schema, fieldType.name, prefix, mode);
+        let augType = ensureInputType(schema, fieldType.name, mode);
         if (args.key) {
             const subField = fieldType.getFields()[args.key];
             if (!subField) {
@@ -81,20 +105,35 @@ function visitFieldDefinition(mode, prefix, schema, args, field, details) {
     if (!mutationType) {
         return;
     }
-    const mutationName = `${prefix}${details.objectType.name}`;
-    let mutationField = mutationType.getFields()[mutationName];
-    if (!mutationField) {
-        return;
+    const mutationField = Object.values(schema.getMutationType().getFields())
+        .find(field => {
+            if (!field._augmentedMutationTarget) return false;
+            return field._augmentedMutationTarget.type === details.objectType.name &&
+                field._augmentedMutationTarget.mode === mode;
+        });
+    if (mutationField) {
+        mutationField.args.push({...augment, type: getNullableType(augment.type)});
+    } else {
+        if (!schema._augmentMutationTypeDelayed) {
+            schema._augmentMutationTypeDelayed = {};
+        }
+        if (!schema._augmentMutationTypeDelayed[mode]) {
+            schema._augmentMutationTypeDelayed[mode] = {};
+        }
+        if (!schema._augmentMutationTypeDelayed[mode][details.objectType.name]) {
+            schema._augmentMutationTypeDelayed[mode][details.objectType.name] = [];
+        }
+        schema._augmentMutationTypeDelayed[mode][details.objectType.name].push(
+            field => field.args.push({...augment, type: getNullableType(augment.type)})
+        );
     }
-    mutationField.args.push({...augment, type: getNullableType(augment.type)});
 }
-
 
 
 class Insert extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        return visitFieldDefinition(config.MODE_INSERT, config.FIELD_PREFIX_INSERT, this.schema, this.args, field, details);
+        return visitFieldDefinition(config.MODE_INSERT, this.schema, this.args, field, details);
     }
 
 }
@@ -103,7 +142,7 @@ class Insert extends SchemaDirectiveVisitor {
 class Update extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        return visitFieldDefinition(config.MODE_UPDATE, config.FIELD_PREFIX_UPDATE, this.schema, this.args, field, details);
+        return visitFieldDefinition(config.MODE_UPDATE, this.schema, this.args, field, details);
     }
 
 }
@@ -112,7 +151,7 @@ class Update extends SchemaDirectiveVisitor {
 class Upsert extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        return visitFieldDefinition(config.MODE_UPSERT, config.FIELD_PREFIX_UPSERT, this.schema, this.args, field, details);
+        return visitFieldDefinition(config.MODE_UPSERT, this.schema, this.args, field, details);
     }
 
 }

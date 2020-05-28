@@ -3,8 +3,8 @@ const {getNamedType, defaultFieldResolver, GraphQLInt, GraphQLObjectType} = requ
 const {GraphQLJSONObject} = require('graphql-type-json');
 
 const config = require('../config');
-const {sideCar} = require('../utils');
-const {augmentField: augmentFieldForQuery} = require('./query');
+const {sidecar} = require('../utils');
+const {getFieldAugments: getFieldAugmentsForQuery} = require('./query');
 const {augmentField: augmentFieldForBatch} = require('./batch');
 const {augmentField: augmentFieldForPage} = require('./page');
 const {augmentField: augmentFieldForSort} = require('./sort');
@@ -12,12 +12,11 @@ const {augmentField: augmentFieldForSort} = require('./sort');
 
 class ResultResolver {
 
-    constructor(resolvers, ctxs, extra, jwt, optionals) {
+    constructor(resolvers, ctxs, jwt, options) {
         this.resolvers = resolvers;
         this.ctxs = ctxs;
-        this.extra = extra;
         this.jwt = jwt;
-        this.optionals = optionals;
+        this.options = options;
 
         this._results = undefined;
         this._count = undefined;
@@ -26,9 +25,10 @@ class ResultResolver {
     async getResults() {
         if (this._results === undefined) {
             if (this.resolvers.return) {
-                this._results = sideCar(
-                    await this.resolvers.return(this.ctxs, this.extra, this.optionals),
-                    {auth: this.resolvers.auth, jwt: this.jwt}
+                this._results = sidecar(
+                    await this.resolvers.return(this.ctxs, this.options),
+                    {auth: this.resolvers.auth, jwt: this.jwt},
+                    '_augmentedSidecar'
                 );
             }
         }
@@ -38,7 +38,7 @@ class ResultResolver {
     async getCount() {
         if (this._count === undefined) {
             if (this.resolvers.count) {
-                this._count = this.resolvers.count(this.ctxs, this.extra, this.optionals);
+                this._count = this.resolvers.count(this.ctxs, this.options);
             }
         }
         return this._count;
@@ -47,7 +47,7 @@ class ResultResolver {
     async getDebugInfo() {
         if (this._debug === undefined) {
             if (this.resolvers.debug) {
-                this._debug = await this.resolvers.debug(this.ctxs, this.extra, this.optionals);
+                this._debug = await this.resolvers.debug(this.ctxs, this.options);
             }
         }
         return this._debug;
@@ -58,7 +58,7 @@ class ResultResolver {
 
 function ensureResultType(schema, fieldType) {
     const typeName = getNamedType(fieldType).name;
-    const resultTypeName = `${typeName}${config.FIELD_PREFIX_RESULT}`;
+    const resultTypeName = `${typeName}${config.MODE_RESULT[0].toUpperCase()}${config.MODE_RESULT.slice(1)}`;
     let resultType = schema.getType(resultTypeName);
     if (!resultType) {
         resultType = new GraphQLObjectType({
@@ -124,7 +124,7 @@ class Result extends SchemaDirectiveVisitor {
         }
         for (const typeField of Object.values(fieldType.getFields())) {
             if (typeField._augmentQuery) {
-                const augments = augmentFieldForQuery(this.schema, typeField);
+                const augments = getFieldAugmentsForQuery(this.schema, typeField);
                 for (const augment of augments) {
                     if (field.args.every(a => a.name !== augment.name)) {
                         field.args.push(augment);

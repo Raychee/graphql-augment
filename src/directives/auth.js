@@ -61,21 +61,21 @@ function ensureAuthFieldResolvers(type) {
     for (const field of Object.values(type.getFields())) {
         const {resolve = defaultFieldResolver} = field;
         field.resolve = async function (parent, args, context, info) {
-            const extra = parent && parent._extra;
-            const env = {parent, args, context, info};
-            const options = {
-                type, mode: config.MODE_RESULT, args, env,
-                auth: type._auth && type._auth[config.MODE_RESULT]
-            };
-            if (extra) {
-                const {jwt: jwtPayload, auth: checkAuthFn} = extra;
+            const sidecar = parent && parent._augmentedSidecar;
+            if (sidecar) {
+                const env = {parent, args, context, info};
+                const options = {
+                    type, mode: config.MODE_RESULT, args, env,
+                    auth: type._auth && type._auth[config.MODE_RESULT]
+                };
+                const {jwt: jwtPayload, auth: checkAuthFn} = sidecar;
                 await checkAuth({}, jwtPayload, checkAuthFn, options);
                 const message = await checkAuth(
                     {}, jwtPayload, checkAuthFn,
                     {
                         ...options,
                         field, silent: (field._auth || {}).silent,
-                        auth: (field._auth || {})[config.MODE_RESULT]
+                        auth: (field._auth || {})[config.MODE_RESULT],
                     },
                 );
                 if (message) {

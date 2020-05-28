@@ -15,7 +15,7 @@ function getEligibleOperators(type) {
 
 
 function ensureQueryInputType(schema, typeName) {
-    const filterInputTypeName = `${typeName}${config.FIELD_PREFIX_QUERY}Input`;
+    const filterInputTypeName = `${typeName}${config.MODE_QUERY[0].toUpperCase()}${config.MODE_QUERY.slice(1)}Input`;
     let filterInputType = schema.getType(filterInputTypeName);
     if (!filterInputType) {
         filterInputType = new GraphQLInputObjectType({
@@ -31,7 +31,7 @@ function ensureQueryInputType(schema, typeName) {
 }
 
 
-function augmentField(schema, field) {
+function getFieldAugments(schema, field) {
     const fieldType = getNamedType(field.type);
     const augments = [];
     if (isInputType(fieldType)) {
@@ -50,17 +50,28 @@ function augmentField(schema, field) {
             augments.push({
                 name: filterInputTypeFieldName,
                 type: inputTypeFieldType,
-                _augmentType: 'filter.operator', _augmentedField: field.name, _augmentedOperator: operator
+                _augmentType: 'filter.operator', 
+                _augmentedField: field.name, 
+                _augmentedOperator: operator
             });
         }
     } else if (fieldType instanceof GraphQLObjectType) {
         augments.push({
             name: field.name,
             type: ensureQueryInputType(schema, fieldType.name),
-            _augmentType: 'filter.nested', _augmentedField: field.name
+            _augmentType: 'filter.nested', 
+            _augmentedField: field.name
         });
     }
     return augments;
+}
+
+function augmentQueryField(field, augments) {
+    for (const augment of augments) {
+        if (field.args.every(a => a.name !== augment.name)) {
+            field.args.push(augment);
+        }
+    }
 }
 
 
@@ -68,13 +79,28 @@ class Query extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
         if (details.objectType === this.schema.getQueryType()) {
-            throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root query fields`);
+            if (!this.args.type) {
+                throw new Error(`directive "@${config.MODE_QUERY}" must specify "type" when used on root query fields`);
+            }
+            const existing = Object.values(this.schema.getQueryType().getFields())
+                .find(field => field._augmentedQueryTarget === this.args.type);
+            if (existing) {
+                throw new Error(`directive "@${config.MODE_QUERY}" should be used on only 1 root query field for type "${this.args.type}"`);
+            }
+            field._augmentedQueryTarget = this.args.type;
+            for (const fn of (this.schema._augmentQueryTypeDelayed || {})[this.args.type] || []) {
+                fn(field);
+            }
+            for (const fn of field._augmentDelayed || []) {
+                fn();
+            }
+            return;
         }
         if (details.objectType === this.schema.getMutationType()) {
             throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root mutation fields`);
         }
         field._augmentQuery = this.args;
-        const augments = augmentField(this.schema, field);
+        const augments = getFieldAugments(this.schema, field);
         const filterInputType = ensureQueryInputType(this.schema, details.objectType.name);
         const filterInputTypeFields = filterInputType.getFields();
         for (const augment of augments) {
@@ -82,13 +108,20 @@ class Query extends SchemaDirectiveVisitor {
                 filterInputTypeFields[augment.name] = augment;
             }
         }
-        const queryField = this.schema.getQueryType().getFields()[details.objectType.name];
+        const queryField = Object.values(this.schema.getQueryType().getFields())
+            .find(field => field._augmentedQueryTarget === details.objectType.name);
         if (queryField) {
-            for (const augment of augments) {
-                if (queryField.args.every(a => a.name !== augment.name)) {
-                    queryField.args.push(augment);
-                }
+            augmentQueryField(queryField, augments)
+        } else {
+            if (!this.schema._augmentQueryTypeDelayed) {
+                this.schema._augmentQueryTypeDelayed = {};
             }
+            if (!this.schema._augmentQueryTypeDelayed[details.objectType.name]) {
+                this.schema._augmentQueryTypeDelayed[details.objectType.name] = [];
+            }
+            this.schema._augmentQueryTypeDelayed[details.objectType.name].push(
+                field => augmentQueryField(field, augments)
+            );
         }
         for (const type of Object.values(this.schema.getTypeMap())) {
             if (type instanceof GraphQLObjectType) {
@@ -113,5 +146,5 @@ module.exports = {
     Query,
 
     ensureQueryInputType,
-    augmentField,
+    getFieldAugments,
 };

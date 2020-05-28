@@ -16,7 +16,7 @@ const {Batch} = require('./src/directives/batch');
 const {Auth} = require('./src/directives/auth');
 const {Jwt} = require('./src/directives/jwt');
 const {AugmentedArgResolver} = require('./src/tools');
-const {checkAuth, getJwtPayload, sideCar} = require('./src/utils');
+const {checkAuth, getJwtPayload, sidecar} = require('./src/utils');
 const config = require('./src/config');
 
 
@@ -42,7 +42,7 @@ module.exports = {
 
     checkAuth,
     getJwtPayload,
-    sideCar,
+    sidecar,
 
     UserInputError, AuthenticationError,
     isInputType, getNamedType, getNullableType,

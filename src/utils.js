@@ -83,9 +83,9 @@ function getJwtPayload(jwtPayload, auth, silent) {
 }
 
 
-function sideCar(obj, extra, key = '_extra') {
+function sidecar(obj, extra, key= '_augmentedSidecar') {
     if (Array.isArray(obj)) {
-        return obj.map(o => sideCar(o, extra, key));
+        return obj.map(o => sidecar(o, extra, key));
     } else if (obj instanceof Date) {
         return obj;
     } else if (typeof obj === 'object' && obj && obj.constructor === Object) {
@@ -95,7 +95,7 @@ function sideCar(obj, extra, key = '_extra') {
                     return extra;
                 } else {
                     const v = Reflect.get(target, p, receiver);
-                    return sideCar(v);
+                    return sidecar(v);
                 }
             }
         });
@@ -108,5 +108,5 @@ function sideCar(obj, extra, key = '_extra') {
 module.exports = {
     checkAuth,
     getJwtPayload,
-    sideCar,
+    sidecar,
 };
