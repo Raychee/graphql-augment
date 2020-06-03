@@ -70,6 +70,11 @@ function visitFieldDefinition(mode, schema, args, field, details) {
     } else if ((fieldType instanceof GraphQLObjectType)) {
         let augType = ensureInputType(schema, fieldType.name, mode);
         if (args.key) {
+            augment._augmentType = 'input.nestedKey';
+            augment._augmentedObjectTypeName = augType.name;
+            augment._augmentedTypeName = augType._augmentedTypeName;
+            augment._augmentedKey = args.key;
+            augment._augmentedField = field.name;
             const subField = fieldType.getFields()[args.key];
             if (!subField) {
                 throw new Error(`field "${args.key}" does not exist in type "${fieldType.name}"`);
@@ -78,11 +83,6 @@ function visitFieldDefinition(mode, schema, args, field, details) {
             if (augType instanceof GraphQLList || !isInputType(augType)) {
                 throw new Error(`field "${args.key}" in type "${fieldType.name}" as an input key needs to be of a scalar type`);
             }
-            augment._augmentType = 'input.nestedKey';
-            augment._augmentedObjectTypeName = augType.name;
-            augment._augmentedTypeName = augType._augmentedTypeName;
-            augment._augmentedKey = args.key;
-            augment._augmentedField = field.name;
         } else {
             augment._augmentType = 'input.nested';
             augment._augmentedField = field.name;
