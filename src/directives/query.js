@@ -5,6 +5,7 @@ const {
 } = require('graphql');
 
 const config = require('../config');
+const {capitalize} = require("../utils");
 
 
 function getEligibleOperators(type) {
@@ -15,7 +16,7 @@ function getEligibleOperators(type) {
 
 
 function ensureQueryInputType(schema, typeName) {
-    const filterInputTypeName = `${typeName}${config.MODE_QUERY[0].toUpperCase()}${config.MODE_QUERY.slice(1)}Input`;
+    const filterInputTypeName = `${typeName}${capitalize(config.MODE_QUERY)}Input`;
     let filterInputType = schema.getType(filterInputTypeName);
     if (!filterInputType) {
         filterInputType = new GraphQLInputObjectType({

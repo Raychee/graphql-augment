@@ -11,10 +11,30 @@ class AugmentedArgResolver {
     constructor(resolvers, {depthFirst = false} = {}) {
         if (!resolvers.init) {
             resolvers = {
-                init() {return {};},
-                others(ctx, arg, value) {ctx[arg] = value;},
-                paginate(ctx, pagination) {Object.assign(ctx, pagination);},
-                sort(ctx, sort) {ctx.sort = sort;},
+                init() {
+                    return {};
+                },
+                filter(ctx, field, op, value) {
+                    ctx[field] = {op, value};
+                },
+                input(ctx, field, value) {
+                    ctx[field] = value;
+                },
+                others(ctx, arg, value) {
+                    ctx[arg] = value;
+                },
+                paginate(ctx, pagination) {
+                    Object.assign(ctx, pagination);
+                },
+                sort(ctx, sort) {
+                    ctx.sort = sort;
+                },
+                nested(ctx, field, nested) {
+                    ctx[field] = nested;
+                },
+                resolve(ctx) {
+                    return ctx;
+                },
                 ...resolvers
             };
         }
@@ -65,8 +85,8 @@ class AugmentedArgResolver {
 
     async _resolve(
         args, schema, env, {
-            field, typeName, mode, jwtPayload, parent, parentType, existingCtx, useResultType,
-            isInBatch, isFirst,
+            field, typeName, mode, jwtPayload, parent, parentType, returnCtx, useResultType,
+            parentArgs, isInBatch, isFirst,
         }
     ) {
         let augmentedSchemaArgs, augmentedTypeName = undefined;
@@ -84,8 +104,8 @@ class AugmentedArgResolver {
         }
 
         const type = augmentedTypeName && schema.getType(augmentedTypeName);
-        const commonResolverOptions = {type, mode, args, env, parent, parentType, isInBatch};
-        let ctx = existingCtx || await this.resolvers.init(parent, commonResolverOptions);
+        const commonResolverOptions = {type, mode, args, env, parent, parentType, parentArgs, isInBatch};
+        let ctx = await this.resolvers.init(commonResolverOptions);
         await checkAuth(
             ctx, jwtPayload, this.resolvers.auth,
             {...commonResolverOptions, auth: ((type || {})._auth || {})[mode], isFirst}
@@ -130,7 +150,10 @@ class AugmentedArgResolver {
                             augmentedArg._augmentedField,
                             await this._resolve(
                                 argValue, schema, env,
-                                {typeName: augmentedArg.type.name, mode, jwtPayload, parent: ctx, parentType: type}
+                                {
+                                    typeName: augmentedArg.type.name, mode, jwtPayload,
+                                    parent: ctx, parentType: type, parentArgs: args,
+                                }
                             ),
                             resolverOptions,
                         ) || ctx;
@@ -140,10 +163,9 @@ class AugmentedArgResolver {
                     if (Array.isArray(argValue)) {
                         const subTypeName = getNamedType(augmentedArg.type).name;
                         for (const arg of argValue) {
-                            let ictx = await this.resolvers.init(parent, commonResolverOptions);
-                            ictx = await this._resolve(arg, schema, env, {
-                                typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
-                                isInBatch: true,
+                            const ictx = await this._resolve(arg, schema, env, {
+                                typeName: subTypeName, mode, jwtPayload, parent, parentType, returnCtx: true,
+                                isInBatch: true, parentArgs: args,
                             });
                             ctxs.push(ictx);
                         }
@@ -183,10 +205,10 @@ class AugmentedArgResolver {
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
                             for (const argV of argValue) {
-                                let ictx = await this.resolvers.init(parent, commonResolverOptions);
-                                ictx = await this._resolve(argV, schema, env, {
+                                const ictx = await this._resolve(argV, schema, env, {
                                     typeName: getNamedType(augmentedArg.type).name,
-                                    mode, jwtPayload, parent: ctx, parentType: type, existingCtx: ictx,
+                                    mode, jwtPayload, parent: ctx, parentType: type, returnCtx: true,
+                                    parentArgs: args,
                                 });
                                 tctxs.push(ictx);
                             }
@@ -199,7 +221,7 @@ class AugmentedArgResolver {
                                 await this._resolve(
                                     argValue, schema, env, {
                                         typeName: augmentedArg.type.name,
-                                        mode, jwtPayload, parent: ctx, parentType: type
+                                        mode, jwtPayload, parent: ctx, parentType: type, parentArgs: args,
                                     }
                                 ),
                                 resolverOptions,
@@ -216,10 +238,10 @@ class AugmentedArgResolver {
                         if (Array.isArray(argValue)) {
                             const tctxs = [];
                             for (const argV of argValue) {
-                                let ictx = await this.resolvers.init(parent, commonResolverOptions);
-                                ictx = await this._resolve({[augmentedArg._augmentedKey]: argV}, schema, env, {
+                                const ictx = await this._resolve({[augmentedArg._augmentedKey]: argV}, schema, env, {
                                     typeName: augmentedArg._augmentedObjectTypeName,
-                                    mode, jwtPayload, parent: ctx, parentType: type, existingCtx: ictx,
+                                    mode, jwtPayload, parent: ctx, parentType: type, returnCtx: true,
+                                    parentArgs: args,
                                 });
                                 tctxs.push(ictx);
                             }
@@ -232,7 +254,7 @@ class AugmentedArgResolver {
                                 augmentedArg._augmentedField,
                                 await this._resolve({[augmentedArg._augmentedKey]: argValue}, schema, env, {
                                     typeName: augmentedArg._augmentedObjectTypeName,
-                                    mode, jwtPayload, parent: ctx, parentType: type
+                                    mode, jwtPayload, parent: ctx, parentType: type, parentArgs: args,
                                 }),
                                 resolverOptions,
                             ) || ctx;
@@ -243,10 +265,9 @@ class AugmentedArgResolver {
                     if (Array.isArray(argValue)) {
                         const subTypeName = getNamedType(augmentedArg.type).name;
                         for (const argV of argValue) {
-                            let ictx = await this.resolvers.init(parent, commonResolverOptions);
-                            ictx = await this._resolve(argV, schema, env, {
-                                typeName: subTypeName, mode, jwtPayload, parent, parentType, existingCtx: ictx,
-                                isInBatch: true,
+                            const ictx = await this._resolve(argV, schema, env, {
+                                typeName: subTypeName, mode, jwtPayload, parent, parentType, returnCtx: true,
+                                isInBatch: true, parentArgs: args,
                             });
                             ctxs.push(ictx);
                         }
@@ -264,15 +285,15 @@ class AugmentedArgResolver {
             }
         }
         if ((config.ARG_NAME_PAGESIZE in pagination || config.ARG_NAME_PAGE in pagination) && this.resolvers.paginate) {
-            const resolverOptions = {...commonResolverOptions, fieldMode: 'filter.pagination'}; 
+            const resolverOptions = {...commonResolverOptions, fieldMode: 'filter.pagination'};
             await checkAuth(
                 ctx, jwtPayload, this.resolvers.auth,
                 {...resolverOptions, ...pagination}
             );
             ctx = await this.resolvers.paginate(ctx, pagination, resolverOptions) || ctx;
         }
-        
-        if (existingCtx) {
+
+        if (returnCtx) {
             return ctx;
         }
         if (parent) {

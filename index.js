@@ -11,7 +11,7 @@ const {Query} = require('./src/directives/query');
 const {Page} = require('./src/directives/page');
 const {Sort} = require('./src/directives/sort');
 const {Result, ResultResolver} = require('./src/directives/result');
-const {Insert, Update, Upsert} = require('./src/directives/input');
+const {Insert, Update, Upsert, Remove, Mutation} = require('./src/directives/input');
 const {Batch} = require('./src/directives/batch');
 const {Auth} = require('./src/directives/auth');
 const {Jwt} = require('./src/directives/jwt');
@@ -29,6 +29,8 @@ module.exports = {
         [config.MODE_INSERT]: Insert,
         [config.MODE_UPDATE]: Update,
         [config.MODE_UPSERT]: Upsert,
+        [config.MODE_REMOVE]: Remove,
+        [config.MODE_MUTATION]: Mutation,
         page: Page,
         sort: Sort,
         result: Result,

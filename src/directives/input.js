@@ -6,10 +6,11 @@ const {
 } = require('graphql');
 
 const config = require('../config');
+const {capitalize} = require("../utils");
 
 
 function ensureInputType(schema, typeName, mode) {
-    const inputTypeName = `${typeName}${mode[0].toUpperCase()}${mode.slice(1)}Input`;
+    const inputTypeName = `${typeName}${capitalize(mode)}Input`;
     let inputType = schema.getType(inputTypeName);
     if (!inputType) {
         inputType = new GraphQLInputObjectType({
@@ -157,10 +158,32 @@ class Upsert extends SchemaDirectiveVisitor {
 }
 
 
+class Remove extends SchemaDirectiveVisitor {
+
+    visitFieldDefinition(field, details) {
+        return visitFieldDefinition(config.MODE_REMOVE, this.schema, this.args, field, details);
+    }
+
+}
+
+
+class Mutation extends SchemaDirectiveVisitor {
+
+    visitFieldDefinition(field, details) {
+        for (const mode of this.args.mode && [this.args.mode] || this.args.modes || []) {
+            return visitFieldDefinition(mode, this.schema, this.args, field, details);
+        }
+    }
+
+}
+
+
 module.exports = {
     Insert,
     Update,
     Upsert,
+    Remove,
+    Mutation,
 
     ensureInputType,
 };

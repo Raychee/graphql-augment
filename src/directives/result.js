@@ -3,7 +3,7 @@ const {getNamedType, defaultFieldResolver, GraphQLInt, GraphQLObjectType} = requ
 const {GraphQLJSONObject} = require('graphql-type-json');
 
 const config = require('../config');
-const {sidecar} = require('../utils');
+const {sidecar, capitalize} = require('../utils');
 const {getFieldAugments: getFieldAugmentsForQuery} = require('./query');
 const {augmentField: augmentFieldForBatch} = require('./batch');
 const {augmentField: augmentFieldForPage} = require('./page');
@@ -58,7 +58,7 @@ class ResultResolver {
 
 function ensureResultType(schema, fieldType) {
     const typeName = getNamedType(fieldType).name;
-    const resultTypeName = `${typeName}${config.MODE_RESULT[0].toUpperCase()}${config.MODE_RESULT.slice(1)}`;
+    const resultTypeName = `${typeName}${capitalize(config.MODE_RESULT)}`;
     let resultType = schema.getType(resultTypeName);
     if (!resultType) {
         resultType = new GraphQLObjectType({
