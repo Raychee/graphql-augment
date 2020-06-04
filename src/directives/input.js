@@ -98,7 +98,7 @@ function visitFieldDefinition(mode, schema, args, field, details) {
     } else {
         throw new Error(`field ${field.name} cannot be processed as ${mode}`);
     }
-    if (args.required === undefined && field.type instanceof GraphQLNonNull || args.required) {
+    if (args.required) {
         augment.type = new GraphQLNonNull(augment.type);
     }
     inputTypeFields[augment.name] = augment;
@@ -113,7 +113,7 @@ function visitFieldDefinition(mode, schema, args, field, details) {
                 field._augmentedMutationTarget.mode === mode;
         });
     if (mutationField) {
-        mutationField.args.push({...augment, type: getNullableType(augment.type)});
+        mutationField.args.push(augment);
     } else {
         if (!schema._augmentMutationTypeDelayed) {
             schema._augmentMutationTypeDelayed = {};
@@ -125,7 +125,7 @@ function visitFieldDefinition(mode, schema, args, field, details) {
             schema._augmentMutationTypeDelayed[mode][details.objectType.name] = [];
         }
         schema._augmentMutationTypeDelayed[mode][details.objectType.name].push(
-            field => field.args.push({...augment, type: getNullableType(augment.type)})
+            field => field.args.push(augment)
         );
     }
 }
