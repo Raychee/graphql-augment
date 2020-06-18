@@ -1,6 +1,7 @@
 const debug = require('debug')('graphql-augment:utils');
 const {AuthenticationError, ForbiddenError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
+const {parseResolveInfo, simplifyParsedResolveInfoFragmentWithType} = require('graphql-parse-resolve-info');
 
 
 async function checkAuth(ctx, jwtPayload, checkAuthFn, {silent, type, field, ...options} = {}) {
@@ -83,6 +84,14 @@ function getJwtPayload(jwtPayload, auth, silent) {
 }
 
 
+function parseReturnFields(info) {
+    const parsed = parseResolveInfo(info);
+    const {fields} = simplifyParsedResolveInfoFragmentWithType(parsed, info.returnType);
+    return fields;
+}
+
+
+
 function sidecar(obj, extra, key= '_augmentedSidecar') {
     if (Array.isArray(obj)) {
         return obj.map(o => sidecar(o, extra, key));
@@ -113,6 +122,7 @@ function capitalize(str) {
 module.exports = {
     checkAuth,
     getJwtPayload,
+    parseReturnFields,
     sidecar,
     capitalize,
 };
