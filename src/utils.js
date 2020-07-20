@@ -1,7 +1,7 @@
 const debug = require('debug')('graphql-augment:utils');
 const {AuthenticationError, ForbiddenError} = require('apollo-server-errors');
 const jwt = require('jsonwebtoken');
-const {parseResolveInfo, simplifyParsedResolveInfoFragmentWithType} = require('graphql-parse-resolve-info');
+const {parseResolveInfo} = require('graphql-parse-resolve-info');
 
 
 async function checkAuth(ctx, jwtPayload, checkAuthFn, {silent, type, field, ...options} = {}) {
@@ -85,9 +85,17 @@ function getJwtPayload(jwtPayload, auth, silent) {
 
 
 function parseReturnFields(info) {
-    const parsed = parseResolveInfo(info);
-    const {fields} = simplifyParsedResolveInfoFragmentWithType(parsed, info.returnType);
-    return fields;
+    function _parse({fieldsByTypeName}) {
+        const [field] = Object.values(fieldsByTypeName);
+        if (field) {
+            return Object.fromEntries(Object.entries(field).map(([fname, f]) => [fname, _parse(f)]));
+        } else {
+            return true;
+        }
+    }
+    
+    return _parse(parseResolveInfo(info));
+    
 }
 
 

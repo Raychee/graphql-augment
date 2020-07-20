@@ -59,16 +59,17 @@ class AugmentedArgResolver {
             if (mutationType) {
                 field = mutationType.getFields()[fieldName];
                 if (field) {
-                    const {type, mode: mode_} = field._augmentedMutationTarget || {};
-                    mode = mode_ || config.MODE_MUTATION;
+                    const {type, mode: mode_} = field._augmentedTarget || {};
+                    mode = mode_ || config.MODE_MUTATE;
                     typeName = type;
                 }
             }
             if (!field) {
                 field = schema.getQueryType().getFields()[fieldName];
                 if (field) {
-                    mode = config.MODE_QUERY;
-                    typeName = field._augmentedQueryTarget;
+                    const {type, mode: mode_} = field._augmentedTarget || {};
+                    mode = mode_ || config.MODE_QUERY;
+                    typeName = type;
                 }
             }
             if (!field) {

@@ -7,7 +7,7 @@ module.exports = {
     ARG_NAME_PAGESIZE: 'limit',
 
     MODE_QUERY: 'query',
-    MODE_MUTATION: 'mutation',
+    MODE_MUTATE: 'mutate',
     MODE_INSERT: 'insert',
     MODE_UPDATE: 'update',
     MODE_UPSERT: 'upsert',

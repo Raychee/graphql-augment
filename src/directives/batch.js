@@ -32,7 +32,7 @@ function augmentField(schema, targetField, typeName) {
 
 
 function augmentMutationField(field, schema) {
-    const {type, mode} = field._augmentedMutationTarget;
+    const {type, mode} = field._augmentedTarget;
     if (!schema.getType(type)) {
         throw new Error(`directive "@batch" used on field "${field.name}" but "${type}" does not match any of the existing types`);
     }
@@ -66,7 +66,7 @@ class Batch extends SchemaDirectiveVisitor {
     visitFieldDefinition(field, details) {
         field._augmentBatch = this.args;
         if (details.objectType === this.schema.getMutationType()) {
-            if (field._augmentedMutationTarget) {
+            if (field._augmentedTarget) {
                 augmentMutationField(field, this.schema);
             } else {
                 if (!field._augmentDelayed) {
@@ -77,13 +77,13 @@ class Batch extends SchemaDirectiveVisitor {
         } else {
             let targetField, typeName;
             if (details.objectType === this.schema.getQueryType()) {
-                if (field._augmentedQueryTarget) {
-                    augmentField(this.schema, field, field._augmentedQueryTarget);
+                if (field._augmentedTarget) {
+                    augmentField(this.schema, field, field._augmentedTarget.type);
                 } else {
                     if (!field._augmentDelayed) {
                         field._augmentDelayed = [];
                     }
-                    field._augmentDelayed.push(() => augmentField(this.schema, field, field._augmentedQueryTarget));
+                    field._augmentDelayed.push(() => augmentField(this.schema, field, field._augmentedTarget.type));
                 }
             } else if (field._augmentResult) {
                 targetField = field;

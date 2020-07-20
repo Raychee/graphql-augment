@@ -27,26 +27,25 @@ function ensureInputType(schema, typeName, mode) {
 
 
 function visitFieldDefinition(mode, schema, args, field, details) {
-    if (details.objectType === schema.getQueryType()) {
-        throw new Error(`directive "@${mode}" should not be used on root query fields`);
-    }
-    if (details.objectType === schema.getMutationType()) {
+    if (details.objectType === schema.getQueryType() || details.objectType === schema.getMutationType()) {
         if (!args.type) {
-            throw new Error(`directive "@${mode}" must specify "type" when used on root mutation fields`);
+            throw new Error(`directive "@${mode}" must specify "type" when used on root query / mutation fields`);
         }
-        if (field._augmentedMutationTarget) {
-            throw new Error(`directive "@${mode}" conflicts with other directives on root mutation field "${field.name}"`);
+        if (field._augmentedTarget) {
+            throw new Error(`directive "@${mode}" conflicts with other directives on root query / mutation field "${field.name}"`);
         }
-        const existing = Object.values(schema.getMutationType().getFields())
-            .find(field => {
-                if (!field._augmentedMutationTarget) return false;
-                return field._augmentedMutationTarget.type === args.type &&
-                    field._augmentedMutationTarget.mode === mode;
-            });
+        const existing = [
+            ...Object.values(schema.getQueryType().getFields()),
+            ...(schema.getMutationType() ? Object.values(schema.getMutationType().getFields()) : []),
+        ].find(field => {
+            if (!field._augmentedTarget) return false;
+            return field._augmentedTarget.type === args.type &&
+                field._augmentedTarget.mode === mode;
+        });
         if (existing) {
-            throw new Error(`directive "@${mode}" should be used on only 1 root mutation field for type "${args.type}"`);
+            throw new Error(`directive "@${mode}" should be used on only 1 root query / mutation field for type "${args.type}"`);
         }
-        field._augmentedMutationTarget = {mode, type: args.type};
+        field._augmentedTarget = {mode, type: args.type};
         let delayed = schema._augmentMutationTypeDelayed;
         delayed = delayed && delayed[mode] && delayed[mode][args.type];
         for (const fn of delayed || []) {
@@ -98,20 +97,22 @@ function visitFieldDefinition(mode, schema, args, field, details) {
     } else {
         throw new Error(`field ${field.name} cannot be processed as ${mode}`);
     }
-    if (args.required) {
+    if (
+        args.required == null ?
+            mode === config.MODE_INSERT && field.type instanceof GraphQLNonNull :
+            args.required
+    ) {
         augment.type = new GraphQLNonNull(augment.type);
     }
     inputTypeFields[augment.name] = augment;
-    let mutationType = schema.getMutationType();
-    if (!mutationType) {
-        return;
-    }
-    const mutationField = Object.values(schema.getMutationType().getFields())
-        .find(field => {
-            if (!field._augmentedMutationTarget) return false;
-            return field._augmentedMutationTarget.type === details.objectType.name &&
-                field._augmentedMutationTarget.mode === mode;
-        });
+    const mutationField = [
+        ...Object.values(schema.getQueryType().getFields()),
+        ...(schema.getMutationType() ? Object.values(schema.getMutationType().getFields()) : []),
+    ].find(field => {
+        if (!field._augmentedTarget) return false;
+        return field._augmentedTarget.type === details.objectType.name &&
+            field._augmentedTarget.mode === mode;
+    });
     if (mutationField) {
         mutationField.args.push(augment);
     } else {

@@ -79,16 +79,22 @@ function augmentQueryField(field, augments) {
 class Query extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
-        if (details.objectType === this.schema.getQueryType()) {
+        if (details.objectType === this.schema.getQueryType() || details.objectType === this.schema.getMutationType()) {
             if (!this.args.type) {
-                throw new Error(`directive "@${config.MODE_QUERY}" must specify "type" when used on root query fields`);
+                throw new Error(`directive "@${config.MODE_QUERY}" must specify "type" when used on root query / mutation fields`);
             }
-            const existing = Object.values(this.schema.getQueryType().getFields())
-                .find(field => field._augmentedQueryTarget === this.args.type);
+            const existing = [
+                ...Object.values(this.schema.getQueryType().getFields()),
+                ...(this.schema.getMutationType() ? Object.values(this.schema.getMutationType().getFields()) : []),
+            ].find(field => {
+                if (!field._augmentedTarget) return false;
+                return field._augmentedTarget.type === this.args.type &&
+                    field._augmentedTarget.mode === config.MODE_QUERY;
+            });
             if (existing) {
-                throw new Error(`directive "@${config.MODE_QUERY}" should be used on only 1 root query field for type "${this.args.type}"`);
+                throw new Error(`directive "@${config.MODE_QUERY}" should be used on only 1 root query / mutation field for type "${this.args.type}"`);
             }
-            field._augmentedQueryTarget = this.args.type;
+            field._augmentedTarget = {mode: config.MODE_QUERY, type: this.args.type};
             for (const fn of (this.schema._augmentQueryTypeDelayed || {})[this.args.type] || []) {
                 fn(field);
             }
@@ -96,9 +102,6 @@ class Query extends SchemaDirectiveVisitor {
                 fn();
             }
             return;
-        }
-        if (details.objectType === this.schema.getMutationType()) {
-            throw new Error(`directive "@${config.MODE_QUERY}" should not be used on root mutation fields`);
         }
         field._augmentQuery = this.args;
         const augments = getFieldAugments(this.schema, field);
@@ -109,8 +112,14 @@ class Query extends SchemaDirectiveVisitor {
                 filterInputTypeFields[augment.name] = augment;
             }
         }
-        const queryField = Object.values(this.schema.getQueryType().getFields())
-            .find(field => field._augmentedQueryTarget === details.objectType.name);
+        const queryField = [
+            ...Object.values(this.schema.getQueryType().getFields()),
+            ...(this.schema.getMutationType() ? Object.values(this.schema.getMutationType().getFields()) : []),
+        ].find(field => {
+            if (!field._augmentedTarget) return false;
+            return field._augmentedTarget.type === details.objectType.name &&
+                field._augmentedTarget.mode === config.MODE_QUERY;
+        });
         if (queryField) {
             augmentQueryField(queryField, augments)
         } else {
