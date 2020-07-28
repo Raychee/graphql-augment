@@ -94,8 +94,10 @@ function parseReturnFields(info) {
         }
     }
     
-    return _parse(parseResolveInfo(info));
-    
+    const ret = _parse(parseResolveInfo(info));
+    if (typeof ret === 'object' && ret) {
+        return ret;
+    }
 }
 
 
