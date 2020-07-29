@@ -155,7 +155,7 @@ class AugmentedArgResolver {
                         const resolved = argValue == null ? argValue : await this._resolve(
                             argValue, schema, env,
                             {
-                                typeName: augmentedArg.type.name, mode, jwtPayload,
+                                typeName: getNamedType(augmentedArg.type).name, mode, jwtPayload,
                                 parent: ctx, parentType: type, parentField: field, parentArgs: args,
                                 returnFields,
                             }
@@ -228,7 +228,7 @@ class AugmentedArgResolver {
                         } else {
                             const resolved = argValue == null ? argValue : await this._resolve(
                                 argValue, schema, env, {
-                                    typeName: augmentedArg.type.name,
+                                    typeName: getNamedType(augmentedArg.type).name,
                                     mode, jwtPayload, parent: ctx,
                                     parentType: type, parentField: field, parentArgs: args, returnFields,
                                 }
