@@ -217,7 +217,7 @@ class AugmentedArgResolver {
                                     {
                                         typeName: getNamedType(augmentedArg.type).name,
                                         mode, jwtPayload, parent: ctx, parentType: type,
-                                        parentArgs: args, parentField: field, returnFields, returnCtx: true,
+                                        parentArgs: args, parentField: field, returnFields,
                                     }
                                 );
                                 tctxs.push(resolved);
