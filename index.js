@@ -1,9 +1,3 @@
-const {UserInputError, AuthenticationError} = require('apollo-server-errors');
-const {
-    isInputType, getNamedType, getNullableType,
-    GraphQLBoolean, GraphQLInt, GraphQLFloat, GraphQLString, GraphQLID, GraphQLList, GraphQLNonNull,
-    GraphQLInputObjectType, GraphQLObjectType,
-} = require('graphql');
 const {GraphQLDateTime} = require('graphql-iso-date');
 const {GraphQLJSON, GraphQLJSONObject} = require('graphql-type-json');
 
@@ -30,7 +24,7 @@ module.exports = {
         [config.MODE_UPDATE]: Update,
         [config.MODE_UPSERT]: Upsert,
         [config.MODE_REMOVE]: Remove,
-        [config.MODE_MUTATION]: Mutation,
+        [config.MODE_MUTATE]: Mutation,
         page: Page,
         sort: Sort,
         result: Result,
@@ -46,10 +40,5 @@ module.exports = {
     getJwtPayload,
     sidecar,
 
-    UserInputError, AuthenticationError,
-    isInputType, getNamedType, getNullableType,
-    GraphQLBoolean, GraphQLInt, GraphQLFloat, GraphQLString, GraphQLID,
     GraphQLDateTime, GraphQLJSON, GraphQLJSONObject,
-    GraphQLInputObjectType, GraphQLObjectType,
-    GraphQLList, GraphQLNonNull,
 };
