@@ -5,6 +5,12 @@ module.exports = {
     ARG_NAME_SORT: 'sort',
     ARG_NAME_PAGE: 'page',
     ARG_NAME_PAGESIZE: 'limit',
+    ARG_NAME_CURSOR: 'cursor',
+    
+    FIELD_NAME_RESULTS: 'results',
+    FIELD_NAME_CURSOR: 'cursor',
+    FIELD_NAME_COUNT: 'count',
+    FIELD_NAME_DEBUG: 'debug',
 
     MODE_QUERY: 'query',
     MODE_MUTATE: 'mutate',

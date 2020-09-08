@@ -192,6 +192,15 @@ class AugmentedArgResolver {
                         ctx = await this.resolvers.sort(ctx, argValue, resolverOptions) || ctx;
                     }
                     break;
+                case "cursor.cursor":
+                    if (augmentedArg.name in args && this.resolvers.cursor) {
+                        await checkAuth(
+                            ctx, jwtPayload, this.resolvers.auth,
+                            {...resolverOptions, cursor: argValue}
+                        );
+                        ctx = await this.resolvers.cursor(ctx, argValue, resolverOptions) || ctx;
+                    }
+                    break;
                 case "input.field":
                     if (augmentedArg.name in args && this.resolvers.input) {
                         await checkAuth(
@@ -322,8 +331,15 @@ class AugmentedArgResolver {
             ctx, jwtPayload, this.resolvers.auth,
             {...commonResolverOptions, auth: ((type || {})._auth || {})[mode], isBeforeReturn: true},
         );
+        
         const result = new ResultResolver(
-            this.resolvers, ctxs, jwtPayload, commonResolverOptions
+            this.resolvers, ctxs, jwtPayload, {
+                ...commonResolverOptions,
+                results: !useResultType || !!returnFields[config.FIELD_NAME_RESULTS],
+                cursor: useResultType && !!returnFields[config.FIELD_NAME_CURSOR],
+                count: useResultType && !!returnFields[config.FIELD_NAME_COUNT],
+                debug: useResultType && !!returnFields[config.FIELD_NAME_DEBUG],
+            },
         );
         if (useResultType) {
             return result;
