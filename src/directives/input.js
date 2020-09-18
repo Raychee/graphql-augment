@@ -67,7 +67,7 @@ function visitFieldDefinition(mode, schema, args, field, details) {
         augment._augmentedField = field.name;
         augment.type = getNullableType(field.type);
     } else if ((fieldType instanceof GraphQLObjectType)) {
-        let augType = ensureInputType(schema, fieldType.name, mode);
+        let augType = ensureInputType(schema, fieldType.name, args.as || mode);
         if (args.key) {
             augment._augmentType = 'input.nestedKey';
             augment._augmentedObjectTypeName = augType.name;
@@ -172,10 +172,21 @@ class Mutation extends SchemaDirectiveVisitor {
 
     visitFieldDefinition(field, details) {
         for (const mode of this.args.mode && [this.args.mode] || this.args.modes || []) {
-            return visitFieldDefinition(mode, this.schema, this.args, field, details);
+            visitFieldDefinition(mode, this.schema, this.args, field, details);
         }
     }
 
+}
+
+
+function makeInputDirective(mode) {
+    
+    return class extends SchemaDirectiveVisitor {
+        visitFieldDefinition(field, details) {
+            visitFieldDefinition(mode, this.schema, this.args, field, details);
+        }
+    };
+    
 }
 
 
@@ -186,5 +197,6 @@ module.exports = {
     Remove,
     Mutation,
 
+    makeInputDirective,
     ensureInputType,
 };
