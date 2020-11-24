@@ -5,6 +5,7 @@ const {Query, makeQueryDirective} = require('./lib/directives/query');
 const {Insert, Update, Upsert, Remove, Mutation, makeMutationDirective} = require('./lib/directives/mutation');
 const {Jwt} = require('./lib/directives/jwt');
 const {AugmentedArgResolver} = require('./lib/resolver');
+const {Response} = require('./lib/utils');
 const config = require('./lib/config');
 
 
@@ -34,4 +35,5 @@ module.exports = {
     },
 
     AugmentedArgResolver,
+    Response,
 };
